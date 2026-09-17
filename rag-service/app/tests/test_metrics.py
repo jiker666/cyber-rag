@@ -4,6 +4,7 @@ from app.evaluation.metrics import (
     citation_accuracy,
     has_fabricated_citation,
     keyword_hit_rate,
+    mrr,
     retrieval_metrics,
 )
 
@@ -106,3 +107,33 @@ def pytest_approx(expected, tol=1e-3):
             return abs(other - expected) <= tol
 
     return _Approx()
+
+
+def test_mrr_first_hit_rank():
+    sources = [
+        {"documentName": "A.pdf"},
+        {"documentName": "OWASP API Security.pdf"},
+        {"documentName": "C.md"},
+    ]
+    # 命中在第 2 位 → 1/2
+    assert mrr(sources, "owasp api") == 0.5
+    # 命中在第 1 位 → 1.0
+    assert mrr(sources, "A.pdf") == 1.0
+    # 全未命中 → 0.0
+    assert mrr(sources, "不存在文档") == 0.0
+    # 无期望来源 / 空结果 → None 不参与统计
+    assert mrr(sources, None) is None
+    assert mrr([], "A.pdf") is None
+
+
+def test_aggregate_includes_mrr():
+    results = [
+        {"error": None, "mrr": 1.0, "precision_at_k": 0.5, "recall_at_k": 1.0,
+         "keyword_hit_rate": 0.8, "citation_matched": 1.0,
+         "retrieval_time": 10, "generation_time": 100, "total_time": 110},
+        {"error": None, "mrr": 0.0, "precision_at_k": 0.0, "recall_at_k": 0.0,
+         "keyword_hit_rate": 0.4, "citation_matched": 0.0,
+         "retrieval_time": 20, "generation_time": 200, "total_time": 220},
+    ]
+    agg = aggregate(results)
+    assert agg["mrr"] == 0.5

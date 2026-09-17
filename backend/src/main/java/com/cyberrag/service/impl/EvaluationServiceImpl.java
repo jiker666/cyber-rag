@@ -161,6 +161,8 @@ public class EvaluationServiceImpl implements EvaluationService {
         task.setTemperature(request.getTemperature() != null
                 ? BigDecimal.valueOf(request.getTemperature()) : config.getTemperature());
         task.setEnableReranker(Boolean.TRUE.equals(request.getEnableReranker()) ? 1 : 0);
+        task.setRetrievalStrategy(request.getRetrievalStrategy() != null
+                ? request.getRetrievalStrategy() : "vector");
         task.setTotal(0);
         task.setCompleted(0);
         task.setFailed(0);
@@ -210,6 +212,8 @@ public class EvaluationServiceImpl implements EvaluationService {
             params.setTopK(task.getTopK());
             params.setTemperature(task.getTemperature() != null ? task.getTemperature().doubleValue() : null);
             params.setEnableReranker(task.getEnableReranker() != null && task.getEnableReranker() == 1);
+            params.setRetrievalStrategy(task.getRetrievalStrategy() != null
+                    ? task.getRetrievalStrategy() : "vector");
             batchRequest.setParams(params);
             batchRequest.setItems(items.stream().map(i -> {
                 EvalBatchRequest.EvalItem item = new EvalBatchRequest.EvalItem();
@@ -244,6 +248,7 @@ public class EvaluationServiceImpl implements EvaluationService {
                 }
                 result.setPrecisionAtK(toBigDecimal(r.getPrecisionAtK()));
                 result.setRecallAtK(toBigDecimal(r.getRecallAtK()));
+                result.setMrr(toBigDecimal(r.getMrr()));
                 result.setKeywordHitRate(toBigDecimal(r.getKeywordHitRate()));
                 if (r.getCitationMatched() != null) {
                     // 引用准确率>0 视为引用匹配成功(0-1 连续值)
@@ -368,7 +373,7 @@ public class EvaluationServiceImpl implements EvaluationService {
         List<EvaluationResult> results = taskResults(taskId);
         StringBuilder sb = new StringBuilder();
         sb.append("taskId,taskName,mode,itemId,question,answer,retrievalTimeMs,generationTimeMs,totalTimeMs,")
-          .append("promptTokens,completionTokens,retrievalHit,precisionAtK,recallAtK,keywordHitRate,citationMatched,")
+          .append("promptTokens,completionTokens,retrievalHit,precisionAtK,recallAtK,mrr,keywordHitRate,citationMatched,")
           .append("manualCorrectness,manualRelevance,manualCompleteness,manualHallucination,error\n");
         for (EvaluationResult r : results) {
             sb.append(taskId).append(',')
@@ -385,6 +390,7 @@ public class EvaluationServiceImpl implements EvaluationService {
               .append(r.getRetrievalHit() == null ? "" : r.getRetrievalHit()).append(',')
               .append(r.getPrecisionAtK() == null ? "" : r.getPrecisionAtK()).append(',')
               .append(r.getRecallAtK() == null ? "" : r.getRecallAtK()).append(',')
+              .append(r.getMrr() == null ? "" : r.getMrr()).append(',')
               .append(r.getKeywordHitRate() == null ? "" : r.getKeywordHitRate()).append(',')
               .append(r.getCitationMatched() == null ? "" : r.getCitationMatched()).append(',')
               .append(r.getManualCorrectness()).append(',')
@@ -409,6 +415,8 @@ public class EvaluationServiceImpl implements EvaluationService {
             row.put("name", task.getName());
             row.put("mode", task.getMode());
             row.put("topK", task.getTopK());
+            row.put("enableReranker", task.getEnableReranker());
+            row.put("retrievalStrategy", task.getRetrievalStrategy());
             row.put("chunkSize", task.getChunkSize());
             row.put("status", task.getStatus());
             Map<String, Object> metrics = task.getMetrics() != null

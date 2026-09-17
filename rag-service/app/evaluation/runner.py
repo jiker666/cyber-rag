@@ -21,6 +21,7 @@ class EvaluationRunner:
             score_threshold=request.params.score_threshold,
             enable_reranker=request.params.enable_reranker,
             rerank_top_n=request.params.rerank_top_n,
+            retrieval_strategy=request.params.retrieval_strategy,
         )
         kb_ids = [request.knowledge_base_id] if request.knowledge_base_id else []
         results: list[EvalItemResult] = []
@@ -33,6 +34,7 @@ class EvaluationRunner:
                 hit, precision, recall = metrics.retrieval_metrics(
                     res.sources, item.expected_source, params.top_k or 5
                 )
+                mrr_value = metrics.mrr(res.sources, item.expected_source)
                 citation = (
                     metrics.citation_accuracy(res.answer, res.sources)
                     if request.mode == "RAG_LLM"
@@ -53,6 +55,7 @@ class EvaluationRunner:
                         retrieval_hit=hit,
                         precision_at_k=precision,
                         recall_at_k=recall,
+                        mrr=mrr_value,
                         keyword_hit_rate=metrics.keyword_hit_rate(
                             res.answer, item.expected_keywords
                         ),

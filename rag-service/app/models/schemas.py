@@ -42,6 +42,8 @@ class ChatRequest(BaseModel):
     score_threshold: float | None = Field(default=None, ge=0, le=1, alias="scoreThreshold")
     enable_reranker: bool | None = Field(default=None, alias="enableReranker")
     rerank_top_n: int | None = Field(default=None, ge=1, le=50, alias="rerankTopN")
+    retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
+    retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
     history_window: int | None = Field(default=None, ge=0, le=20, alias="historyWindow")
     history: list[ChatHistoryMsg] = Field(default_factory=list)
 
@@ -85,6 +87,7 @@ class RetrievalRequest(BaseModel):
     score_threshold: float | None = Field(default=None, ge=0, le=1, alias="scoreThreshold")
     enable_reranker: bool | None = Field(default=None, alias="enableReranker")
     rerank_top_n: int | None = Field(default=None, ge=1, le=50, alias="rerankTopN")
+    retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
 
 
 # ---------------- 评测 ----------------
@@ -108,6 +111,7 @@ class EvalParams(BaseModel):
     score_threshold: float | None = Field(default=None, ge=0, le=1, alias="scoreThreshold")
     enable_reranker: bool | None = Field(default=None, alias="enableReranker")
     rerank_top_n: int | None = Field(default=None, ge=1, le=50, alias="rerankTopN")
+    retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
 
 
 class EvalBatchRequest(BaseModel):
@@ -137,6 +141,7 @@ class EvalItemResult(BaseModel):
     retrieval_hit: bool | None = Field(default=None, alias="retrievalHit")
     precision_at_k: float | None = Field(default=None, alias="precisionAtK")
     recall_at_k: float | None = Field(default=None, alias="recallAtK")
+    mrr: float | None = None
     keyword_hit_rate: float | None = Field(default=None, alias="keywordHitRate")
     citation_matched: float | None = Field(default=None, alias="citationMatched")
     error: str | None = None
@@ -153,6 +158,7 @@ class EvalMetrics(BaseModel):
     retrieval_hit_rate: float | None = Field(default=None, alias="retrievalHitRate")
     precision_at_k: float | None = Field(default=None, alias="precisionAtK")
     recall_at_k: float | None = Field(default=None, alias="recallAtK")
+    mrr: float | None = None
     answer_keyword_accuracy: float | None = Field(default=None, alias="answerKeywordAccuracy")
     citation_accuracy: float | None = Field(default=None, alias="citationAccuracy")
     avg_retrieval_time_ms: float | None = Field(default=None, alias="avgRetrievalTimeMs")

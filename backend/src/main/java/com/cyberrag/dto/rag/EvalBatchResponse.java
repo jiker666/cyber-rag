@@ -27,6 +27,7 @@ public class EvalBatchResponse {
         private Boolean retrievalHit;
         private Double precisionAtK;
         private Double recallAtK;
+        private Double mrr;
         private Double keywordHitRate;
         private Double citationMatched;
         private String error;
@@ -40,6 +41,7 @@ public class EvalBatchResponse {
         private Double retrievalHitRate;
         private Double precisionAtK;
         private Double recallAtK;
+        private Double mrr;
         private Double answerKeywordAccuracy;
         private Double citationAccuracy;
         private Double avgRetrievalTimeMs;

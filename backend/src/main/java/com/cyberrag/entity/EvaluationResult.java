@@ -30,6 +30,7 @@ public class EvaluationResult {
     private Integer retrievalHit;
     private BigDecimal precisionAtK;
     private BigDecimal recallAtK;
+    private BigDecimal mrr;
     private BigDecimal keywordHitRate;
     private Integer citationMatched;
     private Integer manualCorrectness;

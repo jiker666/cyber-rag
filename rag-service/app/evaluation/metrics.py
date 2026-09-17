@@ -51,6 +51,22 @@ def retrieval_metrics(
     return hit, precision, recall
 
 
+def mrr(sources: list[dict], expected_source: str | None) -> float | None:
+    """MRR: 首个相关来源的倒数排名(全未命中为 0.0)。
+
+    适用于期望来源单一/文档级标注的数据集; 无期望来源返回 None 不参与统计。
+    """
+    if not expected_source or not sources:
+        return None
+    expected = expected_source.strip().lower()
+    for rank, s in enumerate(sources, start=1):
+        if expected in str(s.get("documentName", "")).lower() or expected in str(
+            s.get("source", "")
+        ).lower():
+            return round(1.0 / rank, 4)
+    return 0.0
+
+
 def citation_accuracy(answer: str, sources: list[dict]) -> float | None:
     """引用准确率: 回答中引用编号是否真实存在于返回的来源列表。
 
@@ -89,6 +105,7 @@ def aggregate(results: list[dict]) -> dict:
         _avg("retrieval_hit_rate", hits)
     _avg("precision_at_k", [r.get("precision_at_k") for r in completed])
     _avg("recall_at_k", [r.get("recall_at_k") for r in completed])
+    _avg("mrr", [r.get("mrr") for r in completed])
     _avg("answer_keyword_accuracy", [r.get("keyword_hit_rate") for r in completed])
     _avg("citation_accuracy", [r.get("citation_matched") for r in completed])
     _avg("avg_retrieval_time_ms", [float(r.get("retrieval_time", 0)) for r in completed])
