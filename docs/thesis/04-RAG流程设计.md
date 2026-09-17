@@ -135,3 +135,45 @@ retrieve(query, kb_ids, top_k, score_threshold, enable_reranker, rerank_top_n)
 | enable_reranker | 关 | 开/关 | 精排对 Hit/P@K 的增益 |
 
 所有参数经 `rag_config`(全局)与请求级覆盖双层生效, 为第 6 章实验提供单一变量控制。
+
+## 流程图(Mermaid)
+
+### 文档摄取链路
+
+```mermaid
+flowchart TD
+    A[上传文件] --> B{白名单/大小/路径校验}
+    B -->|通过| C[UUID 落盘 + 状态 PENDING]
+    B -->|拒绝| Z[400 错误]
+    C --> D[解析 PDF/MD/TXT/DOCX]
+    D --> E[文本清洗]
+    E --> F[分块 chunk_size/overlap]
+    F --> G[批量 Embedding]
+    G --> H[写入 Chroma kb_id 集合<br/>含 document_id/page/chunk_index 元数据]
+    H --> I[状态 COMPLETED]
+    D -.失败.-> X[状态 FAILED + 原因落库]
+```
+
+### 问答链路(RAG 时序)
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant F as 前端
+    participant J as Spring Boot
+    participant R as FastAPI RAG 服务
+    participant V as Chroma
+    participant L as LLM
+    U->>F: 输入问题
+    F->>J: POST /chat/ask (JWT)
+    J->>R: /chat/query (内部令牌)
+    R->>R: 预处理 + Query Embedding
+    R->>V: 向量检索(可混合 BM25+RRF/重排)
+    V-->>R: Top-K Chunk(含元数据)
+    R->>R: Context Builder + Prompt
+    R->>L: messages(系统提示+历史+上下文)
+    L-->>R: 带 [n] 引用的回答
+    R-->>J: answer + sources + 耗时/tokens
+    J-->>F: 消息落库后返回
+    F->>U: 渲染 Markdown + 可展开引用
+```
