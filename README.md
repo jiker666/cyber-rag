@@ -124,6 +124,26 @@ cd rag-service && .venv/bin/python -m pytest # 67 项(离线 Fake 栈, 无需模
 cd frontend && npm run build                 # vue-tsc 类型检查 + 构建
 ```
 
+## 本科毕设实验说明(全部为真实运行数据)
+
+统一设置: LLM = glm-5.3-flash, Embedding = bge-small-zh-v1.5, 数据集 = 15 题(见 `dataset/evaluation/`),
+知识库 = 20 篇安全文档(512/100 分块, 73 chunks), temperature = 0.3, 相似度阈值 = 0.3。
+逐题原始数据: `docs/experiments/eval_task_*.csv`; 论文分析: `docs/thesis/06-实验设计.md`。
+
+| 实验 | 任务 | 配置 | Hit@K | P@K | MRR | 关键词 | 引用 |
+|---|---|---|---|---|---|---|---|
+| E1 模式对照 | 4 | RAG K=5 | 1.0 | 0.32 | 0.867 | 0.840 | 1.0 |
+| | 5 | LLM 直答 | — | — | — | 0.659 | — |
+| E2 Top-K | 6/7/8 | K=1/3/10 | 0.73/1.0/1.0 | 0.73/0.45/0.25 | 0.73/0.80/0.87 | 0.81/0.82/**0.94** | 1.0/1.0/0.99 |
+| E3 分块 | 9/10 | 256/1024 | 1.0/1.0 | 0.44/0.33 | 0.91/**0.93** | 0.78/**0.93** | 1.0/1.0 |
+| D 混合检索 | 11 | 向量+BM25 RRF | 1.0 | **0.40** | 0.90 | 0.913 | 1.0 |
+| E4 重排 | 14 | +CrossEncoder | 1.0 | **0.40** | **0.89** | **0.927** | 1.0 |
+
+要点: RAG 较 LLM 直答关键词命中 +18.1pp 且引用可溯源; BM25+RRF 与 CrossEncoder 重排
+均使 P@5 +8.0pp; E4 关键词命中率达全部实验最高。MRR 为程序化指标(Hit@K/P@K/MRR 由
+`expectedSources` 与真实检索排序计算), 历史任务 MRR 经 `scripts/recompute-mrr.py` 补算并自校验。
+复现: `scripts/run-experiment.sh [d|e4]`(需三服务已启动)。
+
 ## 验收流程(完整业务闭环)
 
 1. admin 登录 → 新建知识库 → 上传 `dataset/` 文档(观察状态流转至 COMPLETED)
