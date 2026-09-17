@@ -14,11 +14,14 @@
     "axios": "^1.7.9",
     "echarts": "^5.6.0",
     "element-plus": "^2.9.3",
+    "highlight.js": "^11.12.0",
+    "markdown-it": "^15.0.2",
     "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
     "@types/node": "^22.20.3",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "~5.6.3",

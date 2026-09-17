@@ -84,7 +84,7 @@
             <el-icon v-else :size="20" color="#d97757"><Shield /></el-icon>
           </div>
           <div class="bubble">
-            <div class="chat-text" v-html="renderText(msg.content)"></div>
+            <MarkdownView class="chat-text" :source="msg.content" />
             <SourceList v-if="msg.role === 'assistant' && msg.sources?.length" :sources="msg.sources" />
             <div v-if="msg.role === 'assistant'" class="msg-footer">
               <span class="meta">检索 {{ msg.retrievalTime }}ms · 生成 {{ msg.generationTime }}ms</span>
@@ -139,6 +139,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import MarkdownView from '@/components/MarkdownView.vue'
 import SourceList from '@/components/SourceList.vue'
 import {
   ask, regenerate, listMessages, clearMessages, pageConversations,
@@ -164,14 +165,6 @@ const quickQuestions = [
   'JWT 有哪些常见安全风险?',
   '什么是 OWASP API 安全的 BOLA?',
 ]
-
-function renderText(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-  return escaped.replace(/`([^`\n]+)`/g, '<code>$1</code>')
-}
 
 function formatTime(t: string | null) {
   if (!t) return '-'

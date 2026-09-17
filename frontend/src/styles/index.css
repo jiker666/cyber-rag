@@ -169,8 +169,68 @@ body {
   line-height: 1.8;
   font-size: 15px;
   word-break: break-word;
+}
+.chat-text :first-child {
+  margin-top: 0;
+}
+.chat-text :last-child {
+  margin-bottom: 0;
+}
+.chat-text p {
+  margin: 0 0 10px;
   white-space: pre-wrap;
 }
+.chat-text h1,
+.chat-text h2,
+.chat-text h3,
+.chat-text h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  margin: 18px 0 8px;
+  line-height: 1.4;
+}
+.chat-text h1 { font-size: 19px; }
+.chat-text h2 { font-size: 17px; }
+.chat-text h3,
+.chat-text h4 { font-size: 15.5px; }
+.chat-text ul,
+.chat-text ol {
+  margin: 4px 0 10px;
+  padding-left: 22px;
+}
+.chat-text li {
+  margin: 3px 0;
+}
+.chat-text blockquote {
+  margin: 8px 0;
+  padding: 2px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-panel);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+.chat-text a {
+  color: var(--accent-strong);
+}
+.chat-text table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13.5px;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.chat-text th,
+.chat-text td {
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  text-align: left;
+}
+.chat-text th {
+  background: var(--bg-panel);
+  font-weight: 600;
+}
+/* 行内代码 */
 .chat-text code {
   background: #262624;
   border-radius: 5px;
@@ -178,4 +238,48 @@ body {
   font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
   font-size: 13px;
   color: #e8e6dd;
+}
+/* 代码块: 深色纸片 + 头部(语言标签 + 复制按钮) */
+.chat-text .code-block {
+  margin: 10px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #33322e;
+}
+.chat-text .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #1f1e1c;
+  color: #9c9a92;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', Menlo, monospace;
+}
+.chat-text .code-copy {
+  border: none;
+  background: transparent;
+  color: #b8b5ac;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.chat-text .code-copy:hover {
+  color: #f5f4ee;
+  background: rgba(255, 255, 255, 0.08);
+}
+.chat-text .code-block pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  background: #262624;
+}
+.chat-text .code-block code.hljs {
+  padding: 0;
+  background: transparent;
+  color: #e8e6dd;
+  font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
 }
