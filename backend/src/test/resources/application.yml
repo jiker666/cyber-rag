@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:cyberrag;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+      data-locations: classpath:data-h2.sql
+
+app:
+  jwt:
+    secret: test-jwt-secret-for-unit-test-32-chars!!
+    expire-hours: 1
+  rag:
+    service-url: http://localhost:8000
+    internal-token: test-token
+  upload:
+    dir: ./target/test-uploads
+    max-size-mb: 20
+
+logging:
+  level:
+    com.cyberrag: WARN

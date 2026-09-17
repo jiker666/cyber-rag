@@ -1,0 +1,50 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: cyber-rag-backend
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:cyber_rag}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 30MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:cyber-rag-jwt-secret-please-change-to-random-32chars}
+    expire-hours: ${JWT_EXPIRE_HOURS:24}
+  rag:
+    service-url: ${RAG_SERVICE_URL:http://127.0.0.1:8000}
+    internal-token: ${RAG_INTERNAL_TOKEN:}
+    timeout-seconds: 300
+  upload:
+    dir: ${UPLOAD_DIR:./data/uploads}
+    max-size-mb: ${MAX_FILE_SIZE_MB:20}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.cyberrag: INFO
+    org.apache.ibatis.logging: WARN

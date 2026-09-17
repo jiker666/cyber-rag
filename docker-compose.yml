@@ -1,0 +1,95 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: cyberrag-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-cyberrag_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cyber_rag}
+      MYSQL_USER: ${MYSQL_USER:-cyberrag}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cyberrag_pass}
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "127.0.0.1:3306:3306"   # 仅本机可访问, 不暴露公网
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-cyberrag_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [cyberrag]
+
+  rag:
+    build: ./rag-service
+    container_name: cyberrag-rag
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      RAG_INTERNAL_TOKEN: ${RAG_INTERNAL_TOKEN:-change-me-internal-token}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai-compatible}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
+      RERANKER_ENABLED: ${RERANKER_ENABLED:-0}
+      CHROMA_PERSIST_DIR: /app/data/chroma
+    volumes:
+      - chroma-data:/app/data/chroma
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks: [cyberrag]
+
+  backend:
+    build: ./backend
+    container_name: cyberrag-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rag:
+        condition: service_started
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-cyber_rag}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-cyberrag}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-cyberrag_pass}
+      APP_JWT_SECRET: ${JWT_SECRET:-please-change-this-jwt-secret-min-32-bytes!!}
+      APP_RAG_BASE_URL: http://rag:8000
+      APP_RAG_INTERNAL_TOKEN: ${RAG_INTERNAL_TOKEN:-change-me-internal-token}
+      APP_UPLOAD_MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+    volumes:
+      - uploads-data:/app/uploads
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [cyberrag]
+
+  frontend:
+    build: ./frontend
+    container_name: cyberrag-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks: [cyberrag]
+
+volumes:
+  mysql-data:
+  chroma-data:
+  uploads-data:
+
+networks:
+  cyberrag:
+    driver: bridge

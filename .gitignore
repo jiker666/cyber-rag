@@ -1,0 +1,32 @@
+# 忽略密钥与本地数据, 严禁提交真实 API Key
+.env
+.env.local
+*.env.local
+
+# Python
+rag-service/.venv/
+rag-service/data/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Java
+backend/target/
+*.class
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# 运行时数据
+data/
+uploads/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# 模型缓存(本地下载的 bge 模型)
+rag-service/models_cache/

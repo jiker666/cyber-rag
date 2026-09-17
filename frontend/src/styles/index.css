@@ -1,0 +1,181 @@
+/* ===== CyberRAG 全局样式: Claude 风格暖纸主题 ===== */
+:root {
+  /* 基底: 米色纸感 */
+  --bg-base: #f5f4ee;
+  --bg-panel: #f0eee6;
+  --bg-card: #fcfcf9;
+  --bg-hover: #eae7dc;
+  --border-color: #e3dfd3;
+  --border-color-lighter: #ece8dd;
+  --text-primary: #141413;
+  --text-secondary: #7c7a72;
+
+  /* 主色: 陶土橙 */
+  --accent: #d97757;
+  --accent-strong: #c4633f;
+  --accent-2: #c08a1e;
+  --accent-soft: rgba(217, 119, 87, 0.1);
+
+  --success: #6a9a58;
+  --danger: #c0432f;
+  --warning: #c08a1e;
+
+  --font-sans: 'Avenir Next', 'Inter', 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+  --font-serif: 'Georgia', 'Times New Roman', 'Songti SC', 'STSong', 'SimSun', serif;
+
+  /* 柔和纸片阴影 */
+  --shadow-card: 0 1px 3px rgba(20, 20, 19, 0.04), 0 4px 14px rgba(20, 20, 19, 0.05);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Element Plus 暖色浅主题变量覆盖 ===== */
+:root {
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: #e08e70;
+  --el-color-primary-light-5: #e9ac95;
+  --el-color-primary-light-7: #f2cbbb;
+  --el-color-primary-light-8: #f6dbd1;
+  --el-color-primary-light-9: #faece6;
+  --el-color-primary-dark-2: var(--accent-strong);
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning);
+  --el-color-danger: var(--danger);
+  --el-color-error: var(--danger);
+  --el-color-info: #8f8c84;
+
+  --el-bg-color: var(--bg-card);
+  --el-bg-color-overlay: #ffffff;
+  --el-bg-color-page: var(--bg-base);
+  --el-fill-color-blank: var(--bg-card);
+  --el-fill-color-light: var(--bg-panel);
+  --el-fill-color-lighter: var(--border-color-lighter);
+  --el-fill-color: var(--bg-hover);
+  --el-fill-color-dark: #e3dfd3;
+
+  --el-border-color: var(--border-color);
+  --el-border-color-light: var(--border-color);
+  --el-border-color-lighter: var(--border-color-lighter);
+  --el-border-color-extra-light: var(--border-color-lighter);
+
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: #3d3d3a;
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: #a8a599;
+
+  --el-menu-bg-color: transparent;
+  --el-disabled-bg-color: var(--bg-panel);
+
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 18px;
+
+  --el-box-shadow-light: var(--shadow-card);
+  --el-font-family: var(--font-sans);
+}
+
+/* 页面通用 */
+.page {
+  padding: 24px 28px;
+}
+
+.page-title {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin: 0 0 4px;
+}
+
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.panel-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d1c2;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c5bfae;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 表格 */
+.el-table {
+  --el-table-border-color: var(--border-color-lighter);
+  --el-table-header-bg-color: var(--bg-panel);
+  --el-table-row-hover-bg-color: var(--bg-hover);
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  background: transparent;
+  --el-table-header-text-color: var(--text-secondary);
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+}
+
+/* 卡片 */
+.el-card {
+  --el-card-bg-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+/* 对话框/抽屉 */
+.el-dialog,
+.el-drawer {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+/* 标签 */
+.cyber-tag {
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* 聊天区 markdown 风格文本 */
+.chat-text {
+  line-height: 1.8;
+  font-size: 15px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.chat-text code {
+  background: #262624;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: #e8e6dd;
+}
