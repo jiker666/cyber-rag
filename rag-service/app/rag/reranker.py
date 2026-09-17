@@ -87,14 +87,21 @@ class NoopReranker(BaseReranker):
         return chunks[:top_n]
 
 
+_cross_encoder_instance: "CrossEncoderReranker | None" = None
+
+
 def get_reranker(enabled: bool | None = None) -> BaseReranker:
     """根据配置返回 Reranker 实例。
 
     enabled: 请求级开关, 显式传入时覆盖全局配置(RAG_RERANKER_ENABLED);
     None 时回落全局配置。检索器在已决定启用重排时应传 enabled=True。
+    CrossEncoder 为进程级单例(模型加载约 3s, 逐请求重建会显著拖慢检索)。
     """
+    global _cross_encoder_instance
     settings = get_settings()
     use = settings.reranker_enabled if enabled is None else enabled
     if use:
-        return CrossEncoderReranker()
+        if _cross_encoder_instance is None:
+            _cross_encoder_instance = CrossEncoderReranker()
+        return _cross_encoder_instance
     return NoopReranker()
