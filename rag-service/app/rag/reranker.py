@@ -37,10 +37,27 @@ class CrossEncoderReranker(BaseReranker):
                         from sentence_transformers import CrossEncoder
                     except ImportError as e:  # pragma: no cover
                         raise RuntimeError("sentence-transformers 未安装") from e
-                    logger.info("加载 Reranker 模型: %s", self.model_name)
+                    model_path = self._resolve_local_path(self.model_name)
+                    logger.info("加载 Reranker 模型: %s (路径: %s)", self.model_name, model_path)
                     self._model = CrossEncoder(
-                        self.model_name, max_length=self._max_length
+                        model_path, max_length=self._max_length
                     )
+
+    @staticmethod
+    def _resolve_local_path(model_name: str) -> str:
+        """优先解析本地 HF 缓存快照路径, 避免联网做 etag 检查(网络不通时会长时间挂起);
+        缓存不存在时回退为模型名(由 HF Hub 正常下载)。"""
+        import glob
+        import os
+        from app.core.config import get_settings
+        settings = get_settings()
+        if os.path.isdir(model_name):
+            return model_name
+        repo_dir = os.path.join(settings.model_dir, f"models--{model_name.replace('/', '--')}", "snapshots", "*")
+        for snap in sorted(glob.glob(repo_dir)):
+            if os.path.exists(os.path.join(snap, "config.json")):
+                return snap
+        return model_name
 
     def rerank(self, query: str, chunks: list, top_n: int = 3) -> list:
         if not chunks:
@@ -70,9 +87,14 @@ class NoopReranker(BaseReranker):
         return chunks[:top_n]
 
 
-def get_reranker() -> BaseReranker:
-    """根据配置返回 Reranker 实例。"""
+def get_reranker(enabled: bool | None = None) -> BaseReranker:
+    """根据配置返回 Reranker 实例。
+
+    enabled: 请求级开关, 显式传入时覆盖全局配置(RAG_RERANKER_ENABLED);
+    None 时回落全局配置。检索器在已决定启用重排时应传 enabled=True。
+    """
     settings = get_settings()
-    if settings.reranker_enabled:
+    use = settings.reranker_enabled if enabled is None else enabled
+    if use:
         return CrossEncoderReranker()
     return NoopReranker()

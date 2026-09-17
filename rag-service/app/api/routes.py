@@ -188,6 +188,7 @@ async def retrieval_search(req: RetrievalRequest):
         score_threshold=req.score_threshold,
         enable_reranker=req.enable_reranker,
         rerank_top_n=req.rerank_top_n,
+        retrieval_strategy=req.retrieval_strategy,
     )
     return {
         "code": 0,

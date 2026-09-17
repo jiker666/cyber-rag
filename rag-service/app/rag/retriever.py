@@ -112,7 +112,7 @@ class Retriever:
 
         # 可选重排序
         if use_rerank and candidates:
-            reranker = self._default_reranker or get_reranker()
+            reranker = self._default_reranker or get_reranker(enabled=True)
             keep = rerank_top_n or settings.default_top_k
             candidates = reranker.rerank(query, candidates, top_n=keep)
 
