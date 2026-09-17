@@ -21,6 +21,7 @@ public class EvalBatchRequest {
         private Double scoreThreshold;
         private Boolean enableReranker;
         private Integer rerankTopN;
+        private String retrievalStrategy;
     }
 
     @Data

@@ -9,6 +9,7 @@ export interface RagConfig {
   scoreThreshold: number
   enableReranker: number
   rerankTopN: number
+  retrievalStrategy: string
   historyWindow: number
   updatedAt: string
 }
@@ -26,6 +27,7 @@ export interface RuntimeInfo {
   llm: { provider: string; model: string; error?: string }
   reranker: { enabled: boolean; model: string }
   vectorStore: { type: string; persistDir: string }
+  retrieval: { strategy: string }
   defaults: Record<string, number>
 }
 

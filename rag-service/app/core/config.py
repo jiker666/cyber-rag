@@ -42,6 +42,8 @@ class Settings(BaseSettings):
 
     # Reranker
     reranker_enabled: bool = False
+    # 检索策略: vector(纯向量) | hybrid(向量 + BM25 RRF 融合)
+    retrieval_strategy: str = "vector"
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_max_length: int = 512
 

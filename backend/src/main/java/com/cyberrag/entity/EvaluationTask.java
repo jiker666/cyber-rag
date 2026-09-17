@@ -23,6 +23,7 @@ public class EvaluationTask {
     private Integer chunkOverlap;
     private BigDecimal temperature;
     private Integer enableReranker;
+    private String retrievalStrategy;
     private Integer total;
     private Integer completed;
     private Integer failed;

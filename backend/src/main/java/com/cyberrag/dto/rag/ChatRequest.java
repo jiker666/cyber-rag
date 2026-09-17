@@ -22,6 +22,7 @@ public class ChatRequest {
     private Double scoreThreshold;
     private Boolean enableReranker;
     private Integer rerankTopN;
+    private String retrievalStrategy;
     private Integer historyWindow;
     private List<HistoryMsg> history;
 

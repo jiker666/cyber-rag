@@ -1,0 +1,53 @@
+{
+  "name": "示例格式(取自真实数据集前3题)",
+  "description": "字段说明见本目录 README.md",
+  "items": [
+    {
+      "id": "q001",
+      "question": "什么是 SQL 注入?如何防御?",
+      "referenceAnswer": "SQL 注入是将恶意 SQL 语句插入应用查询参数欺骗数据库执行非预期命令的攻击。防御: 参数化查询/预编译语句、ORM 使用 #{} 占位符、输入白名单校验、数据库最小权限、错误信息脱敏。",
+      "expectedKeywords": [
+        "参数化查询",
+        "预编译",
+        "最小权限",
+        "白名单"
+      ],
+      "expectedSources": [
+        "SQL注入防护指南.md"
+      ],
+      "category": "Web安全"
+    },
+    {
+      "id": "q002",
+      "question": "MyBatis 中 #{} 和 ${} 的区别是什么?",
+      "referenceAnswer": "#{} 是参数化占位符, 会将输入作为数据绑定, 安全; ${} 是字符串直接拼接, 存在 SQL 注入风险, 严禁用于用户可控输入。动态排序字段等场景应使用白名单映射。",
+      "expectedKeywords": [
+        "参数化",
+        "拼接",
+        "注入",
+        "白名单"
+      ],
+      "expectedSources": [
+        "SQL注入防护指南.md"
+      ],
+      "category": "Web安全"
+    },
+    {
+      "id": "q003",
+      "question": "XSS 有哪几种类型?分别如何防御?",
+      "referenceAnswer": "XSS 分为反射型(参数回显)、存储型(入库后影响所有访问者)、DOM 型(前端不当操作 DOM)。防御: 输出编码、框架默认转义、避免 v-html/innerHTML、CSP、HttpOnly Cookie、富文本白名单净化。",
+      "expectedKeywords": [
+        "反射型",
+        "存储型",
+        "DOM",
+        "输出编码",
+        "CSP",
+        "HttpOnly"
+      ],
+      "expectedSources": [
+        "XSS防护指南.md"
+      ],
+      "category": "Web安全"
+    }
+  ]
+}

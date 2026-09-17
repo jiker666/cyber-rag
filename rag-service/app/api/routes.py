@@ -159,6 +159,7 @@ async def chat_query(req: ChatRequest):
         score_threshold=req.score_threshold,
         enable_reranker=req.enable_reranker,
         rerank_top_n=req.rerank_top_n,
+        retrieval_strategy=req.retrieval_strategy,
         history_window=req.history_window,
     )
     history = [ChatHistoryItem(role=h.role, content=h.content) for h in req.history]
@@ -221,6 +222,7 @@ async def runtime_config():
             "llm": llm_info,
             "reranker": {"enabled": settings.reranker_enabled, "model": settings.reranker_model},
             "vectorStore": {"type": "chroma", "persistDir": settings.chroma_persist_dir},
+            "retrieval": {"strategy": settings.retrieval_strategy},
             "defaults": {
                 "chunkSize": settings.default_chunk_size,
                 "chunkOverlap": settings.default_chunk_overlap,

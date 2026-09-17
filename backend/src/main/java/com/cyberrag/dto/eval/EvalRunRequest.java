@@ -38,4 +38,7 @@ public class EvalRunRequest {
     private Double temperature;
 
     private Boolean enableReranker;
+
+    /** vector / hybrid */
+    private String retrievalStrategy;
 }

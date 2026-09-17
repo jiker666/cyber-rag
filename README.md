@@ -18,13 +18,15 @@ Retrieval-Augmented Generation based Cybersecurity Knowledge QA System
 - **知识库管理**: 按安全子域分库, Chroma 集合级隔离, 统计概览
 - **文档管理**: PDF/TXT/MD/DOCX 上传; 解析→清洗→分块→向量化异步流水线;
   状态机 `PENDING→PARSING→EMBEDDING→COMPLETED/FAILED`(失败可见原因, 可重试)
-- **RAG 问答**: 多轮会话; 查询预处理→向量检索 Top-K→(可选)CrossEncoder 重排→上下文构造→LLM 生成;
-  回答以 `[1][2]` 标注引用, 来源可展开(文档名/页码/相似度/原文); 支持重新生成、临时调参
+- **RAG 问答**: 多轮会话; 查询预处理→检索(向量 / 混合 BM25+RRF)→(可选)CrossEncoder 重排→上下文构造→LLM 生成;
+  回答以 `[1][2]` 标注引用, 来源可展开(文档名/页码/相似度/原文); 支持重新生成、临时调参;
+  Markdown 渲染 + 代码高亮 + 一键复制(默认转义防 XSS)
 - **数据看板**: 用户/知识库/文档/问答统计卡片 + 近 7 天问答趋势 + 分类占比 + 知识库调用排行
-- **参数配置**: ChunkSize/Overlap/Top-K/Temperature/阈值/重排序/历史窗口, 全局可调
-- **评估实验**: LLM_ONLY vs RAG_LLM 对照; Top-K {1,3,5,10}、ChunkSize {256,512,1024} 扫描;
-  自动指标(Hit Rate、P@K、R@K、关键词命中、引用准确率、耗时)+ 人工评分(1-5 分/幻觉标注);
-  任务对比 + CSV 导出
+- **参数配置**: ChunkSize/Overlap/Top-K/Temperature/阈值/检索策略/重排序/历史窗口, 全局可调
+- **评估实验**: LLM_ONLY vs RAG_LLM 对照; Top-K {1,3,5,10}、ChunkSize {256,512,1024}、
+  检索策略(vector/hybrid)、Reranker 开关扫描;
+  自动指标(Hit Rate、P@K、R@K、MRR、关键词命中、引用准确率、耗时)+ 人工评分(1-5 分/幻觉标注);
+  任务对比 + CSV 导出; 标准评测集见 `dataset/evaluation/`
 - **安全实践**: 上传白名单/大小限制/随机文件名/防目录穿越; SQL 全参数化; 接口鉴权 + 管理员注解;
   API Key 仅环境变量; 日志脱敏; 前端零密钥
 
@@ -108,16 +110,17 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 
 ```
 离线: 文档 → 解析(页级) → 清洗 → 中文语义分块(512/100) → BGE 向量化 → Chroma(kb_{id} 集合)
-在线: 问题 → 预处理 → 向量化 → Top-K 检索(阈值过滤, 可选重排)
-      → 编号上下文 [1][2]... → 系统提示(仅依据片段+必须引用+无依据拒答) → LLM
-      → 回答 + 引用来源(文档/页码/相似度/原文)
+在线: 问题 → 预处理 → 向量化 → 检索(向量 Top-K / hybrid=向量+BM25 RRF 融合, 阈值过滤)
+      → (可选 CrossEncoder 重排) → 编号上下文 [1][2]...
+      → 系统提示(仅依据片段+必须引用+无依据拒答) → LLM
+      → 回答 + 引用来源(文档/页码/相似度/原文/关键词命中标记)
 ```
 
 ## 运行测试
 
 ```bash
 cd backend && mvn test                       # 34 项(H2 + Mockito)
-cd rag-service && .venv/bin/python -m pytest # 57 项(离线 Fake 栈, 无需模型/网络)
+cd rag-service && .venv/bin/python -m pytest # 67 项(离线 Fake 栈, 无需模型/网络)
 cd frontend && npm run build                 # vue-tsc 类型检查 + 构建
 ```
 

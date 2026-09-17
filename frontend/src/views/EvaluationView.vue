@@ -26,6 +26,15 @@
             <el-option v-for="d in datasets" :key="d.id" :label="`${d.name} (${d.itemCount}题)`" :value="d.id" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="runForm.mode === 'RAG_LLM'" label="检索策略">
+          <el-select v-model="runForm.retrievalStrategy" style="width: 160px">
+            <el-option label="向量" value="vector" />
+            <el-option label="混合(向量+BM25)" value="hybrid" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="runForm.mode === 'RAG_LLM'" label="Reranker">
+          <el-switch v-model="runForm.enableReranker" />
+        </el-form-item>
         <el-form-item v-if="runForm.mode === 'RAG_LLM'" label="Top-K">
           <el-select v-model="runForm.topK" style="width: 110px">
             <el-option v-for="k in [1, 3, 5, 10]" :key="k" :label="`K=${k}`" :value="k" />
@@ -75,7 +84,7 @@
         </el-table-column>
         <el-table-column label="参数" width="150" align="center">
           <template #default="{ row }">
-            <span class="mono">K={{ row.topK }}{{ row.chunkSize ? ` · CS=${row.chunkSize}` : '' }}</span>
+            <span class="mono">K={{ row.topK }}{{ row.chunkSize ? ` · CS=${row.chunkSize}` : '' }}{{ row.retrievalStrategy === 'hybrid' ? ' · 混合' : '' }}{{ row.enableReranker === 1 ? ' · 重排' : '' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="进度" width="110" align="center">
@@ -111,6 +120,7 @@
             <div class="m-title">自动指标</div>
             <el-descriptions :column="2" border size="small">
               <el-descriptions-item label="检索命中率">{{ pct(summary.metrics?.retrievalHitRate) }}</el-descriptions-item>
+              <el-descriptions-item label="MRR">{{ pct(summary.metrics?.mrr) }}</el-descriptions-item>
               <el-descriptions-item label="Precision@K">{{ pct(summary.metrics?.precisionAtK) }}</el-descriptions-item>
               <el-descriptions-item label="Recall@K">{{ pct(summary.metrics?.recallAtK) }}</el-descriptions-item>
               <el-descriptions-item label="答案关键词准确率">{{ pct(summary.metrics?.answerKeywordAccuracy) }}</el-descriptions-item>
@@ -218,11 +228,19 @@
         <el-table-column prop="name" label="任务" min-width="140" fixed="left" />
         <el-table-column prop="mode" label="模式" width="100" align="center" />
         <el-table-column prop="topK" label="K" width="50" align="center" />
+        <el-table-column label="策略" width="86" align="center">
+          <template #default="{ row }">
+            <span>{{ row.retrievalStrategy === 'hybrid' ? '混合' : '向量' }}{{ row.enableReranker === 1 ? '+重排' : '' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="检索命中率" width="100" align="center">
           <template #default="{ row }">{{ pct(row.metrics?.retrievalHitRate) }}</template>
         </el-table-column>
         <el-table-column label="P@K" width="80" align="center">
           <template #default="{ row }">{{ pct(row.metrics?.precisionAtK) }}</template>
+        </el-table-column>
+        <el-table-column label="MRR" width="72" align="center">
+          <template #default="{ row }">{{ pct(row.metrics?.mrr) }}</template>
         </el-table-column>
         <el-table-column label="关键词准确率" width="110" align="center">
           <template #default="{ row }">{{ pct(row.metrics?.answerKeywordAccuracy) }}</template>
@@ -267,7 +285,10 @@ const runForm = reactive<{
   knowledgeBaseId: number | null
   topK: number
   temperature: number
-}>({ name: '', mode: 'RAG_LLM', datasetId: null, knowledgeBaseId: null, topK: 5, temperature: 0.3 })
+  retrievalStrategy: string
+  enableReranker: boolean
+}>({ name: '', mode: 'RAG_LLM', datasetId: null, knowledgeBaseId: null, topK: 5, temperature: 0.3,
+  retrievalStrategy: 'vector', enableReranker: false })
 
 const detailVisible = ref(false)
 const detailTitle = ref('')

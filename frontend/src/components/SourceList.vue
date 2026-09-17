@@ -11,9 +11,10 @@
             <el-tag size="small" type="info" class="index-tag" effect="dark">[{{ i + 1 }}]</el-tag>
             <span class="doc-name">{{ s.documentName }}</span>
             <span v-if="s.page" class="page">第 {{ s.page }} 页</span>
-            <el-tag size="small" :type="scoreType(s.score)" class="score-tag">
+            <el-tag v-if="s.score != null" size="small" :type="scoreType(s.score)" class="score-tag">
               相似度 {{ (s.score * 100).toFixed(1) }}%
             </el-tag>
+            <el-tag v-else size="small" type="warning" class="score-tag" effect="plain">关键词命中</el-tag>
             <el-tag v-if="s.rerankScore != null" size="small" type="warning" class="score-tag">
               重排 {{ s.rerankScore.toFixed(3) }}
             </el-tag>

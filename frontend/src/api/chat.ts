@@ -8,7 +8,7 @@ export interface SourceItem {
   source: string
   page: number | null
   content: string
-  score: number
+  score: number | null
   rerankScore: number | null
 }
 

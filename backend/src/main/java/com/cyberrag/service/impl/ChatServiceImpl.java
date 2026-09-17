@@ -81,6 +81,8 @@ public class ChatServiceImpl implements ChatService {
                 .enableReranker(request.getEnableReranker() != null ? request.getEnableReranker()
                         : config.getEnableReranker() == 1)
                 .rerankTopN(config.getRerankTopN())
+                .retrievalStrategy(config.getRetrievalStrategy() != null
+                        ? config.getRetrievalStrategy() : "vector")
                 .historyWindow(config.getHistoryWindow())
                 .history(historyMsgs)
                 .build();

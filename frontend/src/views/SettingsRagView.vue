@@ -16,6 +16,13 @@
               <el-input-number v-model="config.chunkOverlap" :min="0" :max="4000" :step="10" />
               <span class="hint">相邻切片重叠字符数</span>
             </el-form-item>
+            <el-form-item label="检索策略">
+              <el-select v-model="config.retrievalStrategy" style="width: 180px">
+                <el-option label="向量检索" value="vector" />
+                <el-option label="混合检索(向量+BM25)" value="hybrid" />
+              </el-select>
+              <span class="hint">hybrid 用 RRF 融合精确词召回</span>
+            </el-form-item>
             <el-form-item label="Top-K">
               <el-input-number v-model="config.topK" :min="1" :max="50" />
               <span class="hint">检索返回知识片段数</span>

@@ -20,6 +20,7 @@ public class RagConfig {
     private BigDecimal scoreThreshold;
     private Integer enableReranker;
     private Integer rerankTopN;
+    private String retrievalStrategy;
     private Integer historyWindow;
     private Long updatedBy;
     private LocalDateTime createdAt;

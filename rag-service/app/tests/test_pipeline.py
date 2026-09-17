@@ -84,3 +84,16 @@ def test_rag_prompt_contains_context_and_citation(fake_llm):
     assert "知识库片段" in last_user.content
     assert "[1] 来源: Java安全开发规范.pdf" in last_user.content
     assert "第 21 页" in last_user.content
+
+
+def test_no_knowledge_scene_prompt_declares_no_evidence(fake_llm):
+    """无知识场景: 检索为空时, Prompt 必须显式注入'未检索到'声明, 引导 LLM 拒答而非编造。"""
+    retriever = StubRetriever([])  # 无任何命中
+    pipeline = RagPipeline(retriever=retriever, llm=fake_llm)
+    result = pipeline.rag_chat("量子色动力学中的夸克禁闭是什么?", [1])
+    assert result.sources == []  # 无来源 → 前端不显示引用, 不伪装 RAG 答案
+    user_prompt = fake_llm.calls[-1][-1].content
+    assert "知识库中未检索到相关内容" in user_prompt
+    # 系统提示包含无依据拒答规则
+    system_prompt = fake_llm.calls[-1][0].content
+    assert "未找到充分依据" in system_prompt

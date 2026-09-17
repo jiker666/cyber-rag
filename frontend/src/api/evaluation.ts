@@ -28,6 +28,7 @@ export interface EvalTask {
   chunkOverlap: number | null
   temperature: number | null
   enableReranker: number | null
+  retrievalStrategy: string | null
   total: number
   completed: number
   failed: number
@@ -44,6 +45,7 @@ export interface EvalMetrics {
   retrievalHitRate?: number | null
   precisionAtK?: number | null
   recallAtK?: number | null
+  mrr?: number | null
   answerKeywordAccuracy?: number | null
   citationAccuracy?: number | null
   avgRetrievalTimeMs?: number | null
@@ -124,6 +126,7 @@ export function runTask(payload: {
   chunkOverlap?: number
   temperature?: number
   enableReranker?: boolean
+  retrievalStrategy?: string
 }): Promise<EvalTask> {
   return request.post('/evaluation/tasks', payload)
 }

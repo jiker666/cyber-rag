@@ -136,6 +136,18 @@ class ChromaStore:
         except Exception:
             logger.warning("删除向量集合失败(可能不存在): %s", name)
 
+    def get_all(self, knowledge_base_id: int) -> list[dict]:
+        """读取集合内全部文档, 供 BM25 索引构建。返回 [{content, metadata}]。"""
+        collection = self._get_collection(knowledge_base_id)
+        if collection.count() == 0:
+            return []
+        data = collection.get(include=["documents", "metadatas"])
+        docs = data.get("documents") or []
+        metas = data.get("metadatas") or []
+        return [
+            {"content": doc, "metadata": meta or {}} for doc, meta in zip(docs, metas)
+        ]
+
     def count(self, knowledge_base_id: int) -> int:
         try:
             return self._get_collection(knowledge_base_id).count()
