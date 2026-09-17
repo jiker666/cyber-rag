@@ -351,6 +351,8 @@ async function onRun() {
       knowledgeBaseId: runForm.knowledgeBaseId ?? undefined,
       topK: runForm.topK,
       temperature: runForm.temperature,
+      retrievalStrategy: runForm.mode === 'RAG_LLM' ? runForm.retrievalStrategy : undefined,
+      enableReranker: runForm.mode === 'RAG_LLM' ? runForm.enableReranker : undefined,
     })
     ElMessage.success('任务已创建, 正在后台运行')
     loadTasks()
