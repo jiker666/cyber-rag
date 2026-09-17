@@ -37,6 +37,7 @@ class RagParams:
     score_threshold: float | None = None
     enable_reranker: bool | None = None
     rerank_top_n: int | None = None
+    retrieval_strategy: str | None = None
     history_window: int | None = None
 
 
@@ -114,6 +115,7 @@ class RagPipeline:
                 score_threshold=params.score_threshold,
                 enable_reranker=params.enable_reranker,
                 rerank_top_n=params.rerank_top_n,
+                retrieval_strategy=params.retrieval_strategy,
             )
         retrieval_time = int((time.perf_counter() - retrieve_start) * 1000)
 
