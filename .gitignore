@@ -30,3 +30,5 @@ uploads/
 
 # 模型缓存(本地下载的 bge 模型)
 rag-service/models_cache/
+frontend/tsconfig*.tsbuildinfo
+frontend/vite.config.d.ts
