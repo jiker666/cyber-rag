@@ -20,7 +20,7 @@
     <el-card shadow="never">
       <el-table :data="records" v-loading="loading">
         <el-table-column prop="name" label="文档名称" min-width="240" show-overflow-tooltip />
-        <el-table-column label="知识库" width="150">
+        <el-table-column label="知识库" width="165" show-overflow-tooltip>
           <template #default="{ row }">{{ kbMap[row.knowledgeBaseId] || row.knowledgeBaseId }}</template>
         </el-table-column>
         <el-table-column prop="fileType" label="类型" width="80" align="center">
