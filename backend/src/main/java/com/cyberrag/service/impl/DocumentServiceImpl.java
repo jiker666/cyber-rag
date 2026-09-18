@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cyberrag.common.constants.Constants;
 import com.cyberrag.common.exception.BusinessException;
+import com.cyberrag.config.AppProperties;
 import com.cyberrag.entity.Document;
 import com.cyberrag.entity.KnowledgeBase;
 import com.cyberrag.entity.RagConfig;
@@ -16,7 +17,6 @@ import com.cyberrag.service.DocumentService;
 import com.cyberrag.service.KnowledgeBaseService;
 import com.cyberrag.service.RagConfigService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -48,6 +48,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
     private final RagConfigService ragConfigService;
     private final RagServiceClient ragClient;
     private final Path uploadRoot;
+    private final int maxFileSizeMb;
     private final ExecutorService ingestExecutor = Executors.newFixedThreadPool(2, r -> {
         Thread t = new Thread(r, "doc-ingest");
         t.setDaemon(true);
@@ -58,12 +59,13 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
                                KnowledgeBaseService kbService,
                                RagConfigService ragConfigService,
                                RagServiceClient ragClient,
-                               @Value("${app.upload.dir:./data/uploads}") String uploadDir) {
+                               AppProperties appProperties) {
         this.documentMapper = documentMapper;
         this.kbService = kbService;
         this.ragConfigService = ragConfigService;
         this.ragClient = ragClient;
-        this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.uploadRoot = Paths.get(appProperties.getUpload().getDir()).toAbsolutePath().normalize();
+        this.maxFileSizeMb = appProperties.getUpload().getMaxSizeMb();
         try {
             Files.createDirectories(uploadRoot);
         } catch (IOException e) {
@@ -87,8 +89,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         if (ext == null || !Constants.ALLOWED_EXTENSIONS.contains(ext.toLowerCase(Locale.ROOT))) {
             throw new BusinessException(400, "仅支持 PDF/TXT/Markdown/DOCX 格式文档");
         }
-        if (file.getSize() > Constants.MAX_FILE_SIZE_MB * 1024L * 1024L) {
-            throw new BusinessException(413, "文件大小超过 " + Constants.MAX_FILE_SIZE_MB + "MB 限制");
+        if (file.getSize() > maxFileSizeMb * 1024L * 1024L) {
+            throw new BusinessException(413, "文件大小超过 " + maxFileSizeMb + "MB 限制");
         }
 
         // 随机文件名落盘

@@ -43,7 +43,6 @@ class ChatRequest(BaseModel):
     enable_reranker: bool | None = Field(default=None, alias="enableReranker")
     rerank_top_n: int | None = Field(default=None, ge=1, le=50, alias="rerankTopN")
     retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
-    retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
     history_window: int | None = Field(default=None, ge=0, le=20, alias="historyWindow")
     history: list[ChatHistoryMsg] = Field(default_factory=list)
 
@@ -160,7 +159,7 @@ class EvalMetrics(BaseModel):
     recall_at_k: float | None = Field(default=None, alias="recallAtK")
     mrr: float | None = None
     answer_keyword_accuracy: float | None = Field(default=None, alias="answerKeywordAccuracy")
-    citation_accuracy: float | None = Field(default=None, alias="citationAccuracy")
+    citation_validity: float | None = Field(default=None, alias="citationValidity")
     avg_retrieval_time_ms: float | None = Field(default=None, alias="avgRetrievalTimeMs")
     avg_generation_time_ms: float | None = Field(default=None, alias="avgGenerationTimeMs")
     avg_total_time_ms: float | None = Field(default=None, alias="avgTotalTimeMs")

@@ -251,7 +251,7 @@ public class EvaluationServiceImpl implements EvaluationService {
                 result.setMrr(toBigDecimal(r.getMrr()));
                 result.setKeywordHitRate(toBigDecimal(r.getKeywordHitRate()));
                 if (r.getCitationMatched() != null) {
-                    // 引用准确率>0 视为引用匹配成功(0-1 连续值)
+                    // 逐题引用编号有效率(0-1 连续值)二值化入库: >0.5 记为有效(历史口径保持不变)
                     result.setCitationMatched(r.getCitationMatched() > 0.5 ? 1 : 0);
                 }
                 result.setManualCorrectness(0);

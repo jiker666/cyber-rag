@@ -29,18 +29,28 @@ services:
     environment:
       TZ: Asia/Shanghai
       RAG_INTERNAL_TOKEN: ${RAG_INTERNAL_TOKEN:-change-me-internal-token}
+      # LLM: 与 .env.example / app/core/config.py 默认保持一致
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai-compatible}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      # Embedding: 默认本地 BGE(与 README/.env.example/Settings 默认一致);
+      # 切换远程 API 时设 EMBEDDING_PROVIDER=openai 并配置 EMBEDDING_* 三项
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
       EMBEDDING_API_BASE: ${EMBEDDING_API_BASE}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
-      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1536}
-      RERANKER_ENABLED: ${RERANKER_ENABLED:-0}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
+      RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
+      RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-base}
+      RAG_RETRIEVAL_STRATEGY: ${RAG_RETRIEVAL_STRATEGY:-vector}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
+      # 国内网络可设 HF_ENDPOINT=https://hf-mirror.com 加速模型下载
+      HF_ENDPOINT: ${HF_ENDPOINT:-}
       CHROMA_PERSIST_DIR: /app/data/chroma
     volumes:
       - chroma-data:/app/data/chroma
+      - rag-models:/app/models_cache
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -68,7 +78,7 @@ services:
       APP_JWT_SECRET: ${JWT_SECRET:-please-change-this-jwt-secret-min-32-bytes!!}
       APP_RAG_BASE_URL: http://rag:8000
       APP_RAG_INTERNAL_TOKEN: ${RAG_INTERNAL_TOKEN:-change-me-internal-token}
-      APP_UPLOAD_MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+      APP_UPLOAD_MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
     volumes:
       - uploads-data:/app/uploads
     ports:
@@ -88,6 +98,7 @@ services:
 volumes:
   mysql-data:
   chroma-data:
+  rag-models:
   uploads-data:
 
 networks:

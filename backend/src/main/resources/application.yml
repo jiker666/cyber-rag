@@ -11,7 +11,9 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   servlet:
     multipart:
-      max-file-size: 25MB
+      # 上传上限与业务层校验(MAX_FILE_SIZE_MB)保持同一来源, 默认 20MB
+      max-file-size: ${MAX_FILE_SIZE_MB:20}MB
+      # 请求总上限留少量表单字段余量
       max-request-size: 30MB
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
@@ -35,7 +37,6 @@ app:
   rag:
     service-url: ${RAG_SERVICE_URL:http://127.0.0.1:8000}
     internal-token: ${RAG_INTERNAL_TOKEN:}
-    timeout-seconds: 300
   upload:
     dir: ${UPLOAD_DIR:./data/uploads}
     max-size-mb: ${MAX_FILE_SIZE_MB:20}

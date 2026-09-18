@@ -47,6 +47,8 @@ export interface EvalMetrics {
   recallAtK?: number | null
   mrr?: number | null
   answerKeywordAccuracy?: number | null
+  /** 引用编号有效率: [n] 是否指向真实返回来源(非事实一致性验证); 旧任务 JSON 兼容字段为 citationAccuracy */
+  citationValidity?: number | null
   citationAccuracy?: number | null
   avgRetrievalTimeMs?: number | null
   avgGenerationTimeMs?: number | null

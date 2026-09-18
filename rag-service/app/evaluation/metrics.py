@@ -33,12 +33,13 @@ def retrieval_metrics(
     """基于期望来源文档计算检索指标。
 
     - Retrieval Hit: Top-K 检索结果中是否出现期望来源文档
-    - Precision@K: 检索结果中来自期望来源文档的比例
-    - Recall@K: 文档级别, 期望文档被召回则为 1 否则 0
+    - Precision@K: 标准口径 P@K = Top-K 截断内相关片段数 / K。
+      相似度阈值过滤导致实际返回数 < K 时, 缺失位置按不相关计(分母仍为 K)。
+    - Recall@K: 文档级别, 期望文档被召回则为 1 否则 0(单期望来源下与 Hit 等价)
     """
     if not expected_source:
         return None, None, None
-    k = max(len(sources), 1)
+    k = max(top_k, 1)
     expected = expected_source.strip().lower()
     relevant = sum(
         1 for s in sources
@@ -46,7 +47,7 @@ def retrieval_metrics(
         or expected in str(s.get("source", "")).lower()
     )
     hit = relevant > 0
-    precision = round(relevant / k, 4) if sources else 0.0
+    precision = round(relevant / k, 4)
     recall = 1.0 if hit else 0.0
     return hit, precision, recall
 
@@ -67,9 +68,11 @@ def mrr(sources: list[dict], expected_source: str | None) -> float | None:
     return 0.0
 
 
-def citation_accuracy(answer: str, sources: list[dict]) -> float | None:
-    """引用准确率: 回答中引用编号是否真实存在于返回的来源列表。
+def citation_validity(answer: str, sources: list[dict]) -> float | None:
+    """引用编号有效率(Citation Validity): 回答中引用编号是否真实存在于返回的来源列表。
 
+    仅校验 [n] 编号是否指向实际返回的检索来源(1 ≤ n ≤ len(sources)),
+    **不验证被引用文本在语义上是否支持该结论**, 不等价于事实一致性(faithfulness)验证。
     无引用且无来源 → None(不统计); 引用编号越界或来源为空却标注引用 → 视为无效引用。
     """
     if not sources:
@@ -80,6 +83,10 @@ def citation_accuracy(answer: str, sources: list[dict]) -> float | None:
         return 0.0  # RAG 模式有来源但未引用 → 0
     valid = sum(1 for c in citations if 1 <= int(c) <= len(sources))
     return round(valid / len(citations), 4)
+
+
+# 兼容别名: 早期版本命名, 语义上该指标并非"准确率"
+citation_accuracy = citation_validity
 
 
 def has_fabricated_citation(answer: str, sources: list[dict]) -> bool:
@@ -107,7 +114,7 @@ def aggregate(results: list[dict]) -> dict:
     _avg("recall_at_k", [r.get("recall_at_k") for r in completed])
     _avg("mrr", [r.get("mrr") for r in completed])
     _avg("answer_keyword_accuracy", [r.get("keyword_hit_rate") for r in completed])
-    _avg("citation_accuracy", [r.get("citation_matched") for r in completed])
+    _avg("citation_validity", [r.get("citation_matched") for r in completed])
     _avg("avg_retrieval_time_ms", [float(r.get("retrieval_time", 0)) for r in completed])
     _avg("avg_generation_time_ms", [float(r.get("generation_time", 0)) for r in completed])
     _avg("avg_total_time_ms", [float(r.get("total_time", 0)) for r in completed])

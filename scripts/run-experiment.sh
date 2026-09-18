@@ -39,7 +39,7 @@ export_task() {  # $1 task id  导出 CSV + 打印汇总指标
 import json,sys
 d=json.load(sys.stdin)['data']
 m=d.get('metrics') or (d.get('task') or {}).get('metrics') or {}
-for k in ('retrievalHitRate','precisionAtK','recallAtK','mrr','answerKeywordAccuracy','citationAccuracy','avgRetrievalTimeMs','avgTotalTimeMs'):
+for k in ('retrievalHitRate','precisionAtK','recallAtK','mrr','answerKeywordAccuracy','citationValidity','avgRetrievalTimeMs','avgTotalTimeMs'):
     v=m.get(k)
     print(f'  {k}: {v if v is None else round(v,4)}')"
 }

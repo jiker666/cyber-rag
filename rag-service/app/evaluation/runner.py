@@ -29,17 +29,15 @@ class EvaluationRunner:
             try:
                 if request.mode == "LLM_ONLY":
                     res = self.pipeline.llm_only_chat(item.question, params)
+                    # LLM_ONLY 无检索, Hit/P@K/R@K/MRR/引用类指标不适用(记 None, 不落 0)
+                    hit = precision = recall = mrr_value = citation = None
                 else:
                     res = self.pipeline.rag_chat(item.question, kb_ids, params, history=None)
-                hit, precision, recall = metrics.retrieval_metrics(
-                    res.sources, item.expected_source, params.top_k or 5
-                )
-                mrr_value = metrics.mrr(res.sources, item.expected_source)
-                citation = (
-                    metrics.citation_accuracy(res.answer, res.sources)
-                    if request.mode == "RAG_LLM"
-                    else None
-                )
+                    hit, precision, recall = metrics.retrieval_metrics(
+                        res.sources, item.expected_source, params.top_k or 5
+                    )
+                    mrr_value = metrics.mrr(res.sources, item.expected_source)
+                    citation = metrics.citation_validity(res.answer, res.sources)
                 results.append(
                     EvalItemResult(
                         item_id=item.item_id,

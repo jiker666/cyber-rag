@@ -40,7 +40,11 @@ public class RagServiceClient {
 
     public RagServiceClient(AppProperties properties) {
         this.properties = properties;
-        this.restTemplate = new RestTemplate();
+        // 连接超时 10s: 快速暴露 rag-service 未启动; 读超时不设上限——
+        // 评测批量为长阻塞调用(15 题 × 数十秒生成), 固定读超时会在实验中途截断任务
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        this.restTemplate = new RestTemplate(factory);
         var uriFactory = new DefaultUriBuilderFactory();
         uriFactory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.NONE);
         this.restTemplate.setUriTemplateHandler(uriFactory);

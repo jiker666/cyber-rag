@@ -22,8 +22,6 @@ public class AppProperties {
         private String serviceUrl = "http://127.0.0.1:8000";
         /** 内部通信令牌 */
         private String internalToken = "";
-        /** 调用超时(秒) */
-        private int timeoutSeconds = 180;
     }
 
     @Data

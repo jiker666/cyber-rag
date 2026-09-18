@@ -52,6 +52,17 @@ class DocumentServiceTest extends BaseTest {
     }
 
     @Test
+    void upload_rejects_file_over_configured_size_limit() {
+        // 上限来自 app.upload.max-size-mb(测试配置 20MB), 而非硬编码常量
+        byte[] oversize = new byte[20 * 1024 * 1024 + 1];
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "超大文档.txt", "text/plain", oversize);
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> documentService.upload(file, 1L));
+        assertEquals(413, e.getCode());
+    }
+
+    @Test
     void upload_rejects_path_traversal_filename() {
         // 文件名包含路径穿越, 系统应仅保留文件名部分且通过白名单校验
         MockMultipartFile file = new MockMultipartFile(

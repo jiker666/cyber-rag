@@ -23,7 +23,7 @@ def get_embedding_provider() -> BaseEmbedding:
             return _provider
         settings = get_settings()
         provider_type = settings.embedding_provider.lower()
-        if provider_type == "openai":
+        if provider_type in ("openai", "openai-compatible"):
             logger.info("使用远程 OpenAI 兼容 Embedding: %s", settings.embedding_model)
             _provider = OpenAICompatibleEmbedding()
         else:

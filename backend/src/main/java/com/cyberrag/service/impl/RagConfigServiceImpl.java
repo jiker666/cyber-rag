@@ -46,6 +46,7 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         current.setScoreThreshold(config.getScoreThreshold());
         current.setEnableReranker(config.getEnableReranker());
         current.setRerankTopN(config.getRerankTopN());
+        current.setRetrievalStrategy(normalizeStrategy(config.getRetrievalStrategy()));
         current.setHistoryWindow(config.getHistoryWindow());
         current.setUpdatedBy(AuthContext.getUserId());
         if (current.getId() == null) {
@@ -54,9 +55,22 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         } else {
             configMapper.updateById(current);
         }
-        log.info("RAG 配置已更新: topK={}, chunkSize={}, overlap={}, reranker={}",
-                current.getTopK(), current.getChunkSize(), current.getChunkOverlap(), current.getEnableReranker());
+        log.info("RAG 配置已更新: topK={}, chunkSize={}, overlap={}, strategy={}, reranker={}",
+                current.getTopK(), current.getChunkSize(), current.getChunkOverlap(),
+                current.getRetrievalStrategy(), current.getEnableReranker());
         return current;
+    }
+
+    /** 检索策略仅允许 vector/hybrid, 空值回退 vector。 */
+    private String normalizeStrategy(String strategy) {
+        if (strategy == null || strategy.isBlank()) {
+            return "vector";
+        }
+        String normalized = strategy.trim().toLowerCase();
+        if (!"vector".equals(normalized) && !"hybrid".equals(normalized)) {
+            throw new BusinessException(400, "检索策略仅支持 vector 或 hybrid");
+        }
+        return normalized;
     }
 
     private void validate(RagConfig c) {
@@ -95,6 +109,7 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         c.setScoreThreshold(new BigDecimal("0.30"));
         c.setEnableReranker(0);
         c.setRerankTopN(3);
+        c.setRetrievalStrategy("vector");
         c.setHistoryWindow(6);
         return c;
     }

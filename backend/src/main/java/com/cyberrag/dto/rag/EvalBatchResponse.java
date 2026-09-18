@@ -43,7 +43,8 @@ public class EvalBatchResponse {
         private Double recallAtK;
         private Double mrr;
         private Double answerKeywordAccuracy;
-        private Double citationAccuracy;
+        /** 引用编号有效率(citation validity): [n] 是否指向真实返回来源, 非事实一致性验证 */
+        private Double citationValidity;
         private Double avgRetrievalTimeMs;
         private Double avgGenerationTimeMs;
         private Double avgTotalTimeMs;

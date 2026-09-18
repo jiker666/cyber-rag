@@ -67,7 +67,7 @@ class EvaluationServiceTest extends BaseTest {
         metrics.setCompleted(2);
         metrics.setFailed(0);
         metrics.setRetrievalHitRate(0.5);
-        metrics.setCitationAccuracy(0.5);
+        metrics.setCitationValidity(0.5);
         response.setMetrics(metrics);
         when(ragServiceClient.evaluationBatch(any(EvalBatchRequest.class))).thenReturn(response);
     }

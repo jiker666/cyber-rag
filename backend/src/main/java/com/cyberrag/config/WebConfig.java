@@ -21,6 +21,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
+                        "/api/health",
                         "/api/auth/login",
                         "/api/auth/register",
                         "/v3/api-docs/**",

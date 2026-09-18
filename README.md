@@ -25,7 +25,7 @@ Retrieval-Augmented Generation based Cybersecurity Knowledge QA System
 - **参数配置**: ChunkSize/Overlap/Top-K/Temperature/阈值/检索策略/重排序/历史窗口, 全局可调
 - **评估实验**: LLM_ONLY vs RAG_LLM 对照; Top-K {1,3,5,10}、ChunkSize {256,512,1024}、
   检索策略(vector/hybrid)、Reranker 开关扫描;
-  自动指标(Hit Rate、P@K、R@K、MRR、关键词命中、引用准确率、耗时)+ 人工评分(1-5 分/幻觉标注);
+  自动指标(Hit Rate、P@K、R@K、MRR、关键词命中、引用编号有效率、耗时)+ 人工评分(1-5 分/幻觉标注);
   任务对比 + CSV 导出; 标准评测集见 `dataset/evaluation/`
 - **安全实践**: 上传白名单/大小限制/随机文件名/防目录穿越; SQL 全参数化; 接口鉴权 + 管理员注解;
   API Key 仅环境变量; 日志脱敏; 前端零密钥
@@ -119,13 +119,14 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 ## 运行测试
 
 ```bash
-cd backend && mvn test                       # 34 项(H2 + Mockito)
-cd rag-service && .venv/bin/python -m pytest # 67 项(离线 Fake 栈, 无需模型/网络)
+cd backend && mvn test                       # 39 项(H2 + Mockito; 须 JDK 21, JDK 25 下 Lombok 注解处理失效)
+cd rag-service && .venv/bin/python -m pytest # 77 项(离线 Fake 栈, 无需模型/网络)
 cd frontend && npm run build                 # vue-tsc 类型检查 + 构建
 ```
 
 ## 本科毕设实验说明(全部为真实运行数据)
 
+实验环境快照(硬件/版本/依赖锁定)见 `docs/experiments/ENVIRONMENT.md`, Python 依赖完整锁定 `rag-service/requirements.lock.txt`。
 统一设置: LLM = glm-5.3-flash, Embedding = bge-small-zh-v1.5, 数据集 = 15 题(见 `dataset/evaluation/`),
 知识库 = 20 篇安全文档(512/100 分块, 73 chunks), temperature = 0.3, 相似度阈值 = 0.3。
 逐题原始数据: `docs/experiments/eval_task_*.csv`; 论文分析: `docs/thesis/06-实验设计.md`。

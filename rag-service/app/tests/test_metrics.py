@@ -1,7 +1,7 @@
 """评价指标测试。"""
 from app.evaluation.metrics import (
     aggregate,
-    citation_accuracy,
+    citation_validity,
     has_fabricated_citation,
     keyword_hit_rate,
     mrr,
@@ -49,23 +49,63 @@ def test_retrieval_metrics_no_expectation():
     assert hit is None and precision is None and recall is None
 
 
-def test_citation_accuracy_valid():
+def test_precision_at_k_zero_sources():
+    """阈值过滤后 0 条返回: 有期望来源时 P@K = 0/K = 0, 非零除异常。"""
+    hit, precision, recall = retrieval_metrics([], "SQL注入防护指南", top_k=5)
+    assert hit is False
+    assert precision == 0.0
+    assert recall == 0.0
+
+
+def test_precision_at_k_fewer_than_k():
+    """返回数 < K(如 K=10 仅 9 条): 分母仍为 K, 缺失位置按不相关计(标准 P@K)。"""
+    sources = [_source("SQL注入防护指南.md")] + [_source("其他.md") for _ in range(8)]
+    hit, precision, recall = retrieval_metrics(sources, "SQL注入防护指南", top_k=10)
+    assert hit is True
+    assert precision == 0.1  # 1/10, 而非 1/9
+    assert recall == 1.0
+
+
+def test_precision_at_k_exactly_k():
+    """返回数恰好等于 K: 与按返回数作分母的旧口径一致。"""
+    sources = [_source("SQL注入防护指南.md"), _source("SQL注入防护指南.md"),
+               _source("XSS防护指南.md"), _source("XSS防护指南.md"), _source("CSRF防御指南.md")]
+    hit, precision, recall = retrieval_metrics(sources, "SQL注入防护指南", top_k=5)
+    assert hit is True
+    assert precision == 0.4  # 2 个相关 chunk / 5
+    assert recall == 1.0
+
+
+def test_precision_at_k_multiple_relevant_chunks():
+    """多相关 chunk: 同一期望文档命中多条时按条数计入分子。"""
+    sources = [_source("SQL注入防护指南.md") for _ in range(3)] + [_source("XSS防护指南.md")]
+    _, precision, _ = retrieval_metrics(sources, "SQL注入防护指南", top_k=4)
+    assert precision == 0.75
+
+
+def test_citation_validity_valid():
     answer = "应使用参数化查询 [1], 并开启最小权限 [2]。"
-    assert citation_accuracy(answer, [_source(), _source()]) == 1.0
+    assert citation_validity(answer, [_source(), _source()]) == 1.0
 
 
-def test_citation_accuracy_out_of_range():
+def test_citation_validity_out_of_range():
     answer = "根据资料 [3] 可知。"
-    assert citation_accuracy(answer, [_source()]) == 0.0
+    assert citation_validity(answer, [_source()]) == 0.0
     assert has_fabricated_citation(answer, [_source()]) is True
 
 
-def test_citation_accuracy_no_citation_with_sources():
-    assert citation_accuracy("直接回答", [_source()]) == 0.0
+def test_citation_validity_partial():
+    """部分编号越界: 有效数/引用总数。"""
+    answer = "参数化查询 [1] 与最小权限 [9] 都有帮助。"
+    assert citation_validity(answer, [_source(), _source()]) == 0.5
 
 
-def test_citation_accuracy_no_sources_no_citation():
-    assert citation_accuracy("直接回答", []) is None
+def test_citation_validity_no_citation_with_sources():
+    assert citation_validity("直接回答", [_source()]) == 0.0
+
+
+def test_citation_validity_no_sources_no_citation():
+    assert citation_validity("直接回答", []) is None
 
 
 def test_aggregate_metrics():
@@ -88,6 +128,7 @@ def test_aggregate_metrics():
     assert agg["precision_at_k"] == 0.25
     assert agg["recall_at_k"] == 0.5
     assert agg["answer_keyword_accuracy"] == 0.6
+    assert agg["citation_validity"] == 0.5
     assert agg["avg_total_time_ms"] == 490.0
     assert agg["avg_total_tokens"] == 110.0
 

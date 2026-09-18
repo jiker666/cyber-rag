@@ -183,6 +183,7 @@ CREATE TABLE `rag_config` (
     `score_threshold`   DECIMAL(4,3)  NOT NULL DEFAULT 0.300 COMMENT '相似度阈值',
     `enable_reranker`   TINYINT       NOT NULL DEFAULT 0 COMMENT '是否启用 Reranker: 0否 1是',
     `rerank_top_n`      INT           NOT NULL DEFAULT 3 COMMENT '重排序后保留数量',
+    `retrieval_strategy` VARCHAR(16)  NOT NULL DEFAULT 'vector' COMMENT '检索策略: vector/hybrid',
     `history_window`    INT           NOT NULL DEFAULT 6 COMMENT '携带历史消息条数',
     `updated_by`        BIGINT        DEFAULT NULL COMMENT '更新人',
     `created_at`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -274,11 +275,11 @@ CREATE TABLE `evaluation_result` (
     `completion_tokens` INT          NOT NULL DEFAULT 0 COMMENT '补全 Token',
     `error`             VARCHAR(500) DEFAULT NULL COMMENT '单题失败原因, 成功为NULL',
     `retrieval_hit`     TINYINT      DEFAULT NULL COMMENT '检索是否命中期望来源: 1是 0否 NULL未评',
-    `precision_at_k`    DECIMAL(5,4) DEFAULT NULL COMMENT 'Precision@K',
+    `precision_at_k`    DECIMAL(5,4) DEFAULT NULL COMMENT '标准 Precision@K: Top-K 截断内相关片段数/K',
     `recall_at_k`       DECIMAL(5,4) DEFAULT NULL COMMENT 'Recall@K',
     `mrr`               DECIMAL(5,4) DEFAULT NULL COMMENT 'MRR 平均倒数排名',
     `keyword_hit_rate`  DECIMAL(5,4) DEFAULT NULL COMMENT '关键词命中率',
-    `citation_matched`  TINYINT      DEFAULT NULL COMMENT '引用是否与检索来源一致: 1是 0否',
+    `citation_matched`  TINYINT      DEFAULT NULL COMMENT '引用编号有效率>0.5 二值化: 1有效 0无效(仅校验编号存在, 非事实一致性)',
     `manual_correctness`   TINYINT   DEFAULT 0 COMMENT '人工正确性评分 1-5, 0未评',
     `manual_relevance`     TINYINT   DEFAULT 0 COMMENT '人工相关性评分 1-5, 0未评',
     `manual_completeness`  TINYINT   DEFAULT 0 COMMENT '人工完整性评分 1-5, 0未评',
@@ -313,8 +314,8 @@ INSERT INTO `knowledge_base` (`id`, `name`, `description`, `category`, `cover_co
 (3, 'API安全知识库', 'OWASP API Security Top 10、BOLA、BFLA、API 认证与限流', 'API安全', '#67C23A', 1);
 
 INSERT INTO `rag_config` (`id`, `chunk_size`, `chunk_overlap`, `top_k`, `temperature`, `score_threshold`,
-                          `enable_reranker`, `rerank_top_n`, `history_window`, `updated_by`) VALUES
-(1, 512, 100, 5, 0.30, 0.300, 0, 3, 6, 1);
+                          `enable_reranker`, `rerank_top_n`, `retrieval_strategy`, `history_window`, `updated_by`) VALUES
+(1, 512, 100, 5, 0.30, 0.300, 0, 3, 'vector', 6, 1);
 
 INSERT INTO `evaluation_dataset` (`id`, `name`, `description`, `created_by`) VALUES
 (1, '网络安全问答基准集', '覆盖 SQL 注入/XSS/CSRF/JWT/API 安全等核心知识点的评测题目', 1);

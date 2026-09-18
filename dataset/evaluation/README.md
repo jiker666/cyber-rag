@@ -36,5 +36,5 @@
    `POST /api/evaluation/datasets/{id}/items` 批量写入;
 5. 论文目标 100-200 题: 按上述流程逐步扩充, 系统不限制题目规模(单批上限 100 题)。
 
-> 重要: 所有指标(Hit@K/P@K/R@K/MRR/关键词覆盖/引用准确率)均由程序依据
+> 重要: 所有指标(Hit@K/P@K/R@K/MRR/关键词覆盖/引用编号有效率)均由程序依据
 > `expectedSources` / `expectedKeywords` 与真实检索结果计算, 不使用 LLM 生成指标。

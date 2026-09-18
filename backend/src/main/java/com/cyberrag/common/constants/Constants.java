@@ -38,6 +38,4 @@ public final class Constants {
     /** 消息角色 */
     public static final String MSG_USER = "user";
     public static final String MSG_ASSISTANT = "assistant";
-
-    public static final int MAX_FILE_SIZE_MB = 20;
 }

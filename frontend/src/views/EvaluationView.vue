@@ -121,10 +121,21 @@
             <el-descriptions :column="2" border size="small">
               <el-descriptions-item label="检索命中率">{{ pct(summary.metrics?.retrievalHitRate) }}</el-descriptions-item>
               <el-descriptions-item label="MRR">{{ pct(summary.metrics?.mrr) }}</el-descriptions-item>
-              <el-descriptions-item label="Precision@K">{{ pct(summary.metrics?.precisionAtK) }}</el-descriptions-item>
+              <el-descriptions-item label="Precision@K">
+                <el-tooltip content="标准 P@K = Top-K 截断内期望来源片段数 / K(阈值过滤致返回数<K时缺失位按不相关计)" placement="top">
+                  <span>{{ pct(summary.metrics?.precisionAtK) }}</span>
+                </el-tooltip>
+              </el-descriptions-item>
               <el-descriptions-item label="Recall@K">{{ pct(summary.metrics?.recallAtK) }}</el-descriptions-item>
               <el-descriptions-item label="答案关键词准确率">{{ pct(summary.metrics?.answerKeywordAccuracy) }}</el-descriptions-item>
-              <el-descriptions-item label="引用准确率">{{ pct(summary.metrics?.citationAccuracy) }}</el-descriptions-item>
+              <el-descriptions-item label="引用编号有效率">
+                <el-tooltip
+                  content="回答中 [n] 引用编号指向真实检索来源的比例; 仅校验编号有效性, 不验证引用文本是否语义支持该结论"
+                  placement="top"
+                >
+                  <span>{{ pct(citationOf(summary.metrics)) }}</span>
+                </el-tooltip>
+              </el-descriptions-item>
               <el-descriptions-item label="平均总耗时">{{ ms(summary.metrics?.avgTotalTimeMs) }}</el-descriptions-item>
               <el-descriptions-item label="平均检索耗时">{{ ms(summary.metrics?.avgRetrievalTimeMs) }}</el-descriptions-item>
               <el-descriptions-item label="平均生成耗时">{{ ms(summary.metrics?.avgGenerationTimeMs) }}</el-descriptions-item>
@@ -173,9 +184,11 @@
           </el-table-column>
           <el-table-column label="引用" width="70" align="center">
             <template #default="{ row }">
-              <span v-if="row.citationMatched === 1" class="ok">✓</span>
-              <span v-else-if="row.citationMatched === 0" class="fail">✗</span>
-              <span v-else>-</span>
+              <el-tooltip content="该题引用编号有效率 > 50% 记为有效(仅校验编号存在)" placement="top">
+                <span v-if="row.citationMatched === 1" class="ok">✓</span>
+                <span v-else-if="row.citationMatched === 0" class="fail">✗</span>
+                <span v-else>-</span>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="耗时(ms)" width="90" align="center">
@@ -245,8 +258,8 @@
         <el-table-column label="关键词准确率" width="110" align="center">
           <template #default="{ row }">{{ pct(row.metrics?.answerKeywordAccuracy) }}</template>
         </el-table-column>
-        <el-table-column label="引用准确率" width="100" align="center">
-          <template #default="{ row }">{{ pct(row.metrics?.citationAccuracy) }}</template>
+        <el-table-column label="引用编号有效率" width="110" align="center">
+          <template #default="{ row }">{{ pct(citationOf(row.metrics)) }}</template>
         </el-table-column>
         <el-table-column label="平均耗时" width="95" align="center">
           <template #default="{ row }">{{ ms(row.metrics?.avgTotalTimeMs) }}</template>
@@ -307,6 +320,10 @@ function formatTime(t: string) {
 }
 function pct(v?: number | null) {
   return v == null ? '-' : (v * 100).toFixed(1) + '%'
+}
+/** 引用编号有效率: 新任务 JSON 为 citationValidity, 修复前落库的历史任务为 citationAccuracy */
+function citationOf(metrics?: { citationValidity?: number | null; citationAccuracy?: number | null } | null) {
+  return metrics?.citationValidity ?? metrics?.citationAccuracy
 }
 function ms(v?: number | null) {
   return v == null ? '-' : v.toFixed(0) + 'ms'

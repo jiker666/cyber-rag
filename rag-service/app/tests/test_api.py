@@ -169,6 +169,35 @@ def test_evaluation_batch(client):
     m = data["metrics"]
     assert m["completed"] == 2
     assert m["retrievalHitRate"] == 1.0
+    assert m["citationValidity"] == 1.0
+
+
+def test_evaluation_batch_llm_only_retrieval_metrics_not_applicable(client):
+    """LLM_ONLY 无检索: Hit/P@K/R@K/MRR 应为 null(不适用), 不落 0.0。"""
+    resp = client.post(
+        "/api/evaluation/batch",
+        json={
+            "mode": "LLM_ONLY",
+            "items": [
+                {
+                    "itemId": 1,
+                    "question": "如何防御 SQL 注入?",
+                    "expectedKeywords": "参数化查询",
+                    "expectedSource": "SQL注入防护指南",
+                }
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    r0 = data["results"][0]
+    assert r0["retrievalHit"] is None
+    assert r0["precisionAtK"] is None
+    assert r0["recallAtK"] is None
+    assert r0["mrr"] is None
+    assert r0["citationMatched"] is None
+    assert data["metrics"]["retrievalHitRate"] is None
+    assert data["metrics"]["precisionAtK"] is None
 
 
 def test_validation_error_format(client):

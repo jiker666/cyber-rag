@@ -16,9 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY app/ ./app/
 
-# 非 root 运行
+# 非 root 运行(models_cache 供 compose 命名卷挂载, 需预建并赋权, 避免容器重建后重新下载模型)
 RUN groupadd -r rag && useradd -r -g rag rag \
-    && mkdir -p /app/data/chroma /app/data/uploads \
+    && mkdir -p /app/data/chroma /app/data/uploads /app/models_cache \
     && chown -R rag:rag /app
 USER rag
 
