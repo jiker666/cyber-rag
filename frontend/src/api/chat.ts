@@ -188,17 +188,29 @@ export interface StreamHandlers {
  * 事件: start(会话/消息 ID) → analysis(问题分析+路由) → retrieval(候选+置信度)
  *       → delta(增量文本)×N → done(完整结果, 含 trace) / error
  * 401 时清理本地凭据并跳转登录(与 axios 拦截器行为一致)。
+ * options.signal 中止时静默返回(不触发 onError), 已收到的增量文本由调用方决定去留。
  */
-export async function askStream(payload: AskPayload, handlers: StreamHandlers): Promise<void> {
+export async function askStream(
+  payload: AskPayload,
+  handlers: StreamHandlers,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
   const token = localStorage.getItem('cyberrag_token')
-  const resp = await fetch('/api/chat/ask/stream', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  })
+  let resp: Response
+  try {
+    resp = await fetch('/api/chat/ask/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: options?.signal,
+    })
+  } catch (e: any) {
+    if (e?.name !== 'AbortError') handlers.onError?.(e?.message || '无法连接服务器')
+    return
+  }
 
   if (resp.status === 401) {
     localStorage.removeItem('cyberrag_token')
@@ -255,6 +267,7 @@ export async function askStream(payload: AskPayload, handlers: StreamHandlers): 
     }
     if (buffer) dispatch(buffer)
   } catch (e: any) {
-    handlers.onError?.(e?.message || '流式连接中断')
+    // 手动停止: 不当错误处理, partial 内容保留给调用方
+    if (e?.name !== 'AbortError') handlers.onError?.(e?.message || '流式连接中断')
   }
 }

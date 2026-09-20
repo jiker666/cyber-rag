@@ -140,10 +140,20 @@
             <span class="param-label">Temperature</span>
             <el-input-number v-model="temperature" :min="0" :max="1" :step="0.1" size="small" style="width: 100px" />
           </div>
+          <!-- 流式进行中: 发送按钮切换为停止(abort 当次 fetch, 已生成部分保留) -->
           <el-button
+            v-if="asking"
+            type="danger"
+            plain
+            class="send-btn"
+            @click="stopStreaming"
+          >
+            <el-icon><VideoPause /></el-icon>&nbsp;停 止
+          </el-button>
+          <el-button
+            v-else
             type="primary"
             class="send-btn"
-            :loading="asking"
             :disabled="!question.trim() || !knowledgeBaseId"
             @click="onAsk"
           >
@@ -193,6 +203,24 @@ const STAGE_TEXT: Record<StreamStage, string> = {
 }
 const stageText = computed(() => STAGE_TEXT[streamStage.value])
 
+/** 流式中止控制: 停止按钮/会话切换/清空对话共用 */
+let abortController: AbortController | null = null
+/** 生成序号: 中断时 +1, 使旧流的迟到事件(含已入列的 partial)失效 */
+let genSeq = 0
+
+function stopStreaming() {
+  // 仅 abort, 不 +genSeq: 保留 partial 到当前视图(与切换会话的丢弃语义区分)
+  abortController?.abort()
+}
+
+/** 切换/新建/清空会话时中断进行中的流(旧流事件不再写入新视图) */
+function interruptStreaming() {
+  if (abortController) {
+    genSeq++
+    abortController.abort()
+  }
+}
+
 function confTagType(level: string): 'success' | 'warning' | 'danger' {
   if (level === 'sufficient') return 'success'
   if (level === 'moderate') return 'warning'
@@ -223,11 +251,13 @@ async function loadConversations() {
 }
 
 function newConversation() {
+  interruptStreaming()
   conversationId.value = null
   messages.value = []
 }
 
 async function switchConversation(id: number) {
+  interruptStreaming()
   conversationId.value = id
   messages.value = await listMessages(id)
   const conv = conversations.value.find((c) => c.id === id)
@@ -258,6 +288,11 @@ async function onAsk() {
   scrollToBottom()
 
   let firstDelta = true
+  // 本轮流的中止控制器: 停止按钮/切换会话/清空对话时 abort(askStream 对 AbortError 静默)
+  const controller = new AbortController()
+  abortController = controller
+  const myGen = genSeq // 快照: interruptStreaming 会 +genSeq 使旧流事件失效
+
   await askStream(
     {
       question: q,
@@ -268,15 +303,18 @@ async function onAsk() {
     },
     {
       onStart: (e) => {
+        if (myGen !== genSeq) return
         conversationId.value = e.conversationId
         // 用户消息的临时负数 ID 替换为真实 ID
         const userMsg = messages.value[messages.value.length - 1]
         if (userMsg?.role === 'user' && userMsg.id < 0) userMsg.id = e.userMessageId
       },
       onRetrieval: () => {
+        if (myGen !== genSeq) return
         streamStage.value = 'evidencing'
       },
       onDelta: (text) => {
+        if (myGen !== genSeq) return
         if (firstDelta) {
           firstDelta = false
           streamStage.value = 'generating'
@@ -285,6 +323,7 @@ async function onAsk() {
         scrollToBottom()
       },
       onDone: (e) => {
+        if (myGen !== genSeq) return
         const r = e.response
         messages.value.push({
           id: e.assistantMessageId,
@@ -310,7 +349,34 @@ async function onAsk() {
         ElMessage.error(msg)
       },
     },
+    { signal: controller.signal },
   )
+
+  abortController = null
+
+  // 会话已被切换/新建/清空: 不向新视图写入残留, 直接收尾
+  if (myGen !== genSeq) {
+    asking.value = false
+    streamContent.value = ''
+    return
+  }
+
+  // 手动停止: 已生成的部分保留为一条本地消息(服务端 done 未到达不落库, 刷新后消失)
+  if (controller.signal.aborted && streamContent.value.trim()) {
+    messages.value.push({
+      id: -Date.now(),
+      conversationId: conversationId.value ?? 0,
+      role: 'assistant',
+      content: streamContent.value + '\n\n> ⏹ 已手动停止生成',
+      sources: null,
+      trace: null,
+      retrievalTime: 0,
+      generationTime: 0,
+      totalTokens: 0,
+      createdAt: new Date().toISOString(),
+    })
+    loadConversations()
+  }
 
   // 流结束: 清空流式展示区(成功时完整消息已入列, 失败时保留用户消息)
   asking.value = false
@@ -340,6 +406,7 @@ async function onRegenerate() {
 
 async function onClear() {
   if (!conversationId.value) return
+  interruptStreaming()
   await clearMessages(conversationId.value)
   messages.value = []
   loadConversations()
