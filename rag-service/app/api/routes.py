@@ -1,9 +1,11 @@
-"""API 路由: 文档入库 / 问答 / 检索 / 配置 / 评测。"""
+"""API 路由: 文档入库 / 问答(同步+SSE 流式) / 检索 / 配置 / 评测。"""
+import json
 import logging
 import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.core.config import get_settings
 from app.models.schemas import (
@@ -38,6 +40,24 @@ async def verify_internal_token(
 router = APIRouter(prefix="/api", dependencies=[Depends(verify_internal_token)])
 
 
+def _rag_params(req: ChatRequest) -> RagParams:
+    """ChatRequest → RagParams(含 Adaptive 开关)。"""
+    return RagParams(
+        top_k=req.top_k,
+        temperature=req.temperature,
+        score_threshold=req.score_threshold,
+        enable_reranker=req.enable_reranker,
+        rerank_top_n=req.rerank_top_n,
+        retrieval_strategy=req.retrieval_strategy,
+        history_window=req.history_window,
+        adaptive=req.adaptive,
+        entity_boost=req.entity_boost,
+        rerank_gating=req.rerank_gating,
+        dynamic_context=req.dynamic_context,
+        use_caches=req.use_caches,
+    )
+
+
 # =====================================================================
 # 文档入库
 # =====================================================================
@@ -49,6 +69,7 @@ async def ingest_file_endpoint(
     filename: str | None = Form(default=None),
     chunk_size: int | None = Form(default=None),
     chunk_overlap: int | None = Form(default=None),
+    chunk_mode: str = Form(default="fixed"),
 ):
     """文件上传入库: 由 Java 后端在文档状态流转中调用。"""
     from app.api.ingest_service import ingest_file
@@ -80,6 +101,7 @@ async def ingest_file_endpoint(
             document_id=document_id,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            chunk_mode=chunk_mode,
         )
         return IngestResult(
             chunk_count=result["chunk_count"],
@@ -112,6 +134,7 @@ async def ingest_text_endpoint(req: IngestTextRequest):
         document_id=req.document_id,
         chunk_size=req.chunk_size,
         chunk_overlap=req.chunk_overlap,
+        chunk_mode=req.chunk_mode,
     )
     return IngestResult(
         chunk_count=result["chunk_count"],
@@ -123,13 +146,19 @@ async def ingest_text_endpoint(req: IngestTextRequest):
 
 @router.delete("/ingest/document/{knowledge_base_id}/{document_id}")
 async def delete_document_vectors(knowledge_base_id: int, document_id: int):
+    from app.rag.caches import bump_kb_version
+
     get_vector_store().delete_by_document(knowledge_base_id, document_id)
+    bump_kb_version(knowledge_base_id)  # KB 变更 → 版本号递增 → 检索缓存失效
     return {"code": 0, "message": "ok", "data": None}
 
 
 @router.delete("/ingest/collection/{knowledge_base_id}")
 async def delete_collection(knowledge_base_id: int):
+    from app.rag.caches import bump_kb_version
+
     get_vector_store().delete_collection(knowledge_base_id)
+    bump_kb_version(knowledge_base_id)
     return {"code": 0, "message": "ok", "data": None}
 
 
@@ -151,20 +180,48 @@ async def ingest_stats(knowledge_base_id: int):
 # =====================================================================
 @router.post("/chat/query", response_model=ChatResponse)
 async def chat_query(req: ChatRequest):
-    """RAG 增强问答。"""
+    """RAG 增强问答(同步)。"""
+    if req.stream:
+        # 兼容: 显式 stream=true 时由调用方改用 /chat/stream(此处仍同步返回)
+        pass
     pipeline = RagPipeline()
-    params = RagParams(
-        top_k=req.top_k,
-        temperature=req.temperature,
-        score_threshold=req.score_threshold,
-        enable_reranker=req.enable_reranker,
-        rerank_top_n=req.rerank_top_n,
-        retrieval_strategy=req.retrieval_strategy,
-        history_window=req.history_window,
-    )
     history = [ChatHistoryItem(role=h.role, content=h.content) for h in req.history]
-    result = pipeline.rag_chat(req.question, req.knowledge_base_ids, params, history)
+    result = pipeline.rag_chat(req.question, req.knowledge_base_ids, _rag_params(req), history)
     return ChatResponse(**result.to_dict())
+
+
+@router.post("/chat/stream")
+def chat_stream(req: ChatRequest):
+    """RAG 增强问答(SSE 流式)。
+
+    同步 def + 同步生成器: StreamingResponse 迭代时自动放入线程池,
+    阻塞式 LLM 流式读取不会卡事件循环。事件格式:
+      data: {"type":"analysis",  "analysis":{...}, "route":{...}}
+      data: {"type":"retrieval", "sources":[...], "confidence":{...}}
+      data: {"type":"delta", "text":"..."}   ×N
+      data: {"type":"done", "result":{完整 ChatResponse 字段}}
+    """
+    pipeline = RagPipeline()
+    history = [ChatHistoryItem(role=h.role, content=h.content) for h in req.history]
+    params = _rag_params(req)
+
+    def sse_gen():
+        try:
+            for event in pipeline.rag_chat_stream(req.question, req.knowledge_base_ids, params, history):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:  # 流中途异常: 以 error 事件收尾, 前端可提示
+            logger.exception("SSE 流式问答异常")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)[:200]}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        sse_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # 反向代理不缓冲, 保证逐 token 到达
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/chat/llm-only", response_model=ChatResponse)
@@ -215,6 +272,13 @@ async def runtime_config():
         llm_info = {"provider": llm.name, "model": llm.model}
     except Exception:
         llm_info = {"provider": "openai-compatible", "model": settings.llm_model, "error": "LLM 未配置"}
+    cache_stats: dict
+    try:
+        from app.rag.caches import cache_stats
+
+        cache_stats = cache_stats()
+    except Exception:
+        cache_stats = {}
     return {
         "code": 0,
         "message": "ok",
@@ -224,6 +288,29 @@ async def runtime_config():
             "reranker": {"enabled": settings.reranker_enabled, "model": settings.reranker_model},
             "vectorStore": {"type": "chroma", "persistDir": settings.chroma_persist_dir},
             "retrieval": {"strategy": settings.retrieval_strategy},
+            "adaptive": {
+                "enabled": settings.adaptive_enabled,
+                "entityBoost": settings.entity_boost_enabled,
+                "thresholds": {
+                    "rerankConfidence": settings.rerank_confidence_threshold,
+                    "scoreMargin": settings.rerank_score_margin_threshold,
+                    "agreement": settings.rerank_agreement_threshold,
+                    "complexity": settings.complexity_threshold,
+                    "fastPathTop1": settings.fast_path_top1_min,
+                    "fastPathMargin": settings.fast_path_margin_min,
+                },
+                "contextBudget": {
+                    "maxTokens": settings.max_context_tokens,
+                    "minChunks": settings.min_context_chunks,
+                    "maxChunks": settings.max_context_chunks,
+                },
+                "smallToLarge": {
+                    "parentChunkSize": settings.parent_chunk_size,
+                    "childChunkSize": settings.child_chunk_size,
+                    "childChunkOverlap": settings.child_chunk_overlap,
+                },
+            },
+            "caches": cache_stats,
             "defaults": {
                 "chunkSize": settings.default_chunk_size,
                 "chunkOverlap": settings.default_chunk_overlap,

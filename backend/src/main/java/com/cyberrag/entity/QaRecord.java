@@ -19,6 +19,8 @@ public class QaRecord {
     private String question;
     private String answer;
     private String sources;
+    /** 本次 RAG 决策轨迹 JSON(阶段耗时/路由/门控/缓存) */
+    private String trace;
     private Integer retrievalTime;
     private Integer generationTime;
     private Integer totalTime;

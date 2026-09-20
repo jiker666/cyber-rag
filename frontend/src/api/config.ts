@@ -11,6 +11,8 @@ export interface RagConfig {
   rerankTopN: number
   retrievalStrategy: string
   historyWindow: number
+  /** Adaptive RAG 总开关: 1 开(查询分析+路由+门控+动态上下文) 0 关 */
+  adaptiveEnabled: number
   updatedAt: string
 }
 

@@ -18,14 +18,17 @@ Retrieval-Augmented Generation based Cybersecurity Knowledge QA System
 - **知识库管理**: 按安全子域分库, Chroma 集合级隔离, 统计概览
 - **文档管理**: PDF/TXT/MD/DOCX 上传; 解析→清洗→分块→向量化异步流水线;
   状态机 `PENDING→PARSING→EMBEDDING→COMPLETED/FAILED`(失败可见原因, 可重试)
-- **RAG 问答**: 多轮会话; 查询预处理→检索(向量 / 混合 BM25+RRF)→(可选)CrossEncoder 重排→上下文构造→LLM 生成;
+- **RAG 问答(SSE 流式)**: 多轮会话; 阶段提示(正在检索→正在组织证据→正在生成) + 逐字流式渲染;
+  查询分析→自适应路由→检索(向量 / 混合 BM25+RRF)→置信度门控重排→动态上下文→LLM 生成;
   回答以 `[1][2]` 标注引用, 来源可展开(文档名/页码/相似度/原文); 支持重新生成、临时调参;
+  证据置信度标签(充分/一般/不足) + 可折叠"本次 RAG 决策"面板(问题类型/实体/路由/重排原因/阶段耗时/TTFT/缓存);
   Markdown 渲染 + 代码高亮 + 一键复制(默认转义防 XSS)
 - **数据看板**: 用户/知识库/文档/问答统计卡片 + 近 7 天问答趋势 + 分类占比 + 知识库调用排行
 - **参数配置**: ChunkSize/Overlap/Top-K/Temperature/阈值/检索策略/重排序/历史窗口, 全局可调
 - **评估实验**: LLM_ONLY vs RAG_LLM 对照; Top-K {1,3,5,10}、ChunkSize {256,512,1024}、
-  检索策略(vector/hybrid)、Reranker 开关扫描;
-  自动指标(Hit Rate、P@K、R@K、MRR、关键词命中、引用编号有效率、耗时)+ 人工评分(1-5 分/幻觉标注);
+  检索策略(vector/hybrid)、Reranker 开关扫描; E5 Adaptive 对比(A 向量/B 混合/C 混合+重排/D 自适应)与五开关消融;
+  自动指标(Hit Rate、P@K、R@K、nDCG@K、MRR、关键词命中、引用编号有效率、耗时)+ 人工评分(1-5 分/幻觉标注);
+  Performance Detail(逐题路由/重排触发/上下文 token, 汇总重排激活率);
   任务对比 + CSV 导出; 标准评测集见 `dataset/evaluation/`
 - **安全实践**: 上传白名单/大小限制/随机文件名/防目录穿越; SQL 全参数化; 接口鉴权 + 管理员注解;
   API Key 仅环境变量; 日志脱敏; 前端零密钥
@@ -40,7 +43,7 @@ cyber-rag/
 ├── sql/init.sql     # 13 张表 + 演示账号 + 15 道评测题
 ├── dataset/         # 30+ 篇网络安全示例知识文档(防御性学习内容)
 ├── docs/thesis/     # 论文支撑文档 8 篇
-├── scripts/         # init.sh / run-local.sh
+├── scripts/         # init.sh / run-local.sh / run_round4_experiments.sh(E5+消融驱动)
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -101,6 +104,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 | `EMBEDDING_MODEL` | 本地模型名 | BAAI/bge-m3(轻量可切 bge-small-zh-v1.5) |
 | `JWT_SECRET` | JWT 密钥(≥32 字符, 生产必换) | - |
 | `RAG_INTERNAL_TOKEN` | Java↔Python 内部令牌(两端一致) | - |
+| `ADAPTIVE_ENABLED` | Security-Aware Adaptive RAG 总开关(阈值类变量见 .env.example) | false |
 | `CHROMA_PERSIST_DIR` | 向量库目录 | ./data/chroma |
 | `MAX_FILE_SIZE_MB` | 上传大小上限 | 20 |
 
@@ -110,17 +114,19 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 
 ```
 离线: 文档 → 解析(页级) → 清洗 → 中文语义分块(512/100) → BGE 向量化 → Chroma(kb_{id} 集合)
-在线: 问题 → 预处理 → 向量化 → 检索(向量 Top-K / hybrid=向量+BM25 RRF 融合, 阈值过滤)
-      → (可选 CrossEncoder 重排) → 编号上下文 [1][2]...
-      → 系统提示(仅依据片段+必须引用+无依据拒答) → LLM
-      → 回答 + 引用来源(文档/页码/相似度/原文/关键词命中标记)
+在线(Adaptive): 问题 → 规则查询分析(安全实体/类型/复杂度, 零 LLM)
+      → 自适应路由 EXACT(实体精确)/FAST(向量 Top-3 直出)/HYBRID(向量+BM25 RRF)/DECOMPOSE(多跳分解)
+      → 置信度门控重排(top1 分数+分差+双路一致性, 高置信跳过 CrossEncoder)
+      → 动态上下文(去重→相邻合并→按复杂度的 token 预算) → SSE 流式生成(TTFT 入 trace)
+      → 回答 + 引用来源 + 证据置信度 + "本次 RAG 决策"轨迹(路由/门控原因/阶段耗时/缓存)
+      (adaptive 关闭时回退固定管线: 向量 Top-K / hybrid + 可选重排)
 ```
 
 ## 运行测试
 
 ```bash
-cd backend && mvn test                       # 39 项(H2 + Mockito; 须 JDK 21, JDK 25 下 Lombok 注解处理失效)
-cd rag-service && .venv/bin/python -m pytest # 77 项(离线 Fake 栈, 无需模型/网络)
+cd backend && mvn test                       # 41 项(H2 + Mockito; 须 JDK 21, JDK 25 下 Lombok 注解处理失效)
+cd rag-service && .venv/bin/python -m pytest # 156 项(离线 Fake 栈, 无需模型/网络)
 cd frontend && npm run build                 # vue-tsc 类型检查 + 构建
 ```
 
@@ -139,11 +145,20 @@ cd frontend && npm run build                 # vue-tsc 类型检查 + 构建
 | E3 分块 | 9/10 | 256/1024 | 1.0/1.0 | 0.44/0.33 | 0.91/**0.93** | 0.78/**0.93** | 1.0/1.0 |
 | D 混合检索 | 11 | 向量+BM25 RRF | 1.0 | **0.40** | 0.90 | 0.913 | 1.0 |
 | E4 重排 | 14 | +CrossEncoder | 1.0 | **0.40** | **0.89** | **0.927** | 1.0 |
+| E5 自适应 | 15/16/17/20 | 向量/混合/混合重排/Adaptive | 1.0 | 0.32/**0.40**/0.39/**0.40** | 0.87/0.90/**0.92**/0.89 | 0.853/0.913/**0.924**/0.860* | 1.0/1.0/0.996/0.930* |
+| 消融 | 21-24 | Full/无加权/无门控/无动态 | — | 0.33-0.40 | 0.89-**0.92** | 0.83-0.89 | 0.994-0.997 |
+| 小到大 | 25/26/27 | 256/1024/ParentChild | 1.0 | **0.44**/0.33/0.28* | 0.91/**0.93**/0.89 | 0.813/**0.923**/0.913 | 1.0/0.997/0.997 |
 
 要点: RAG 较 LLM 直答关键词命中 +18.1pp 且引用可溯源; BM25+RRF 与 CrossEncoder 重排
 均使 P@5 +8.0pp; E4 关键词命中率达全部实验最高。MRR 为程序化指标(Hit@K/P@K/MRR 由
 `expectedSources` 与真实检索排序计算), 历史任务 MRR 经 `scripts/recompute-mrr.py` 补算并自校验。
-复现: `scripts/run-experiment.sh [d|e4]`(需三服务已启动)。
+E5(*含 LLM 空响应一题如实计失败): D 组以 93.3% 重排激活率取得与 B 组持平的 P@5;
+消融显示动态上下文预算节省 24% 上下文 Token、置信度门控跳过 20% 重排且关键词 +5.3pp;
+小到大(*ParentChild P@K 为父块去重口径)以 1024 大块 82% 的 Token 取得其 99% 的关键词质量,
+256/1024 与第三轮 E3 独立复测结果一致(0.813 vs 0.78 / 0.923 vs 0.93)。
+消融组检索候选共享缓存融合结果(仅消融模块真实切换, 见 06 §7.7 缓存行为记录);
+延迟/路由/缓存命中率以 `rag-service/scripts/benchmark_adaptive.py` 混合负载基准为准。
+复现: `scripts/run-experiment.sh [d|e4]`; 第四轮 `scripts/run_round4_experiments.sh --phase all`(需三服务已启动)。
 
 ## 验收流程(完整业务闭环)
 

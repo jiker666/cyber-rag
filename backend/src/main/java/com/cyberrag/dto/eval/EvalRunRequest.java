@@ -41,4 +41,16 @@ public class EvalRunRequest {
 
     /** vector / hybrid */
     private String retrievalStrategy;
+
+    // ---- Adaptive RAG(对比实验 E5-D / 消融实验开关) ----
+    /** 自适应总开关(查询分析+路由+门控+动态上下文) */
+    private Boolean adaptive;
+    /** 实体精确加权(消融: -Entity Boost) */
+    private Boolean entityBoost;
+    /** 置信度门控重排(消融: -Reranker Gating, 关闭后回退 enableReranker 固定开关) */
+    private Boolean rerankGating;
+    /** 动态上下文预算(消融: -Dynamic Context) */
+    private Boolean dynamicContext;
+    /** Embedding/检索缓存(消融: -Cache; E5 对比实验统一关闭) */
+    private Boolean useCaches;
 }

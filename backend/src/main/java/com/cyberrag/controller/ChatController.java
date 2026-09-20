@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,12 @@ public class ChatController {
     @PostMapping("/ask")
     public Result<AskVO> ask(@Valid @RequestBody AskRequest request) {
         return Result.success(chatService.ask(request));
+    }
+
+    @Operation(summary = "提问(SSE 流式回答)", description = "逐 token 推送: start → analysis → retrieval → delta×N → done")
+    @PostMapping(value = "/ask/stream", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter askStream(@Valid @RequestBody AskRequest request) {
+        return chatService.streamAsk(request);
     }
 
     @Operation(summary = "重新生成")

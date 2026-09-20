@@ -101,3 +101,79 @@ class AnthropicCompatibleLLM(BaseLLM):
             model=self.model,
             latency_ms=latency,
         )
+
+    def chat_stream(
+        self,
+        messages: list[LLMMessage],
+        temperature: float = 0.3,
+        max_tokens: int | None = None,
+    ):
+        """SSE 流式补全: 逐 token yield, 记录 TTFT(首 token 时延)。
+
+        GLM 5.x thinking 块会以 content_block_delta(thinking_delta) 下发,
+        仅透传 text_delta, 与非流式路径口径一致。
+        """
+        import json as _json
+
+        system_parts = [m.content for m in messages if m.role == "system"]
+        chat_msgs = [{"role": m.role, "content": m.content} for m in messages if m.role != "system"]
+        body: dict = {
+            "model": self.model,
+            "max_tokens": max_tokens or self._max_tokens,
+            "temperature": temperature,
+            "messages": chat_msgs,
+            "stream": True,
+        }
+        if system_parts:
+            body["system"] = "\n\n".join(system_parts)
+        headers = {
+            "x-api-key": self._api_key,
+            "Authorization": f"Bearer {self._api_key}",
+            "anthropic-version": _ANTHROPIC_VERSION,
+            "accept": "text/event-stream",
+        }
+        start = time.perf_counter()
+        first_token_at: float | None = None
+        prompt_tokens = 0
+        completion_tokens = 0
+        try:
+            with httpx.stream(
+                "POST", f"{self._base_url}/v1/messages",
+                headers=headers, json=body, timeout=self._timeout,
+            ) as resp:
+                if resp.status_code != 200:
+                    detail = mask_secrets(resp.read()[:300].decode("utf-8", "ignore"))
+                    raise LLMError(f"大模型流式调用失败: HTTP {resp.status_code} {detail}")
+                for line in resp.iter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    try:
+                        event = _json.loads(line[5:].strip())
+                    except ValueError:
+                        continue
+                    etype = event.get("type")
+                    if etype == "message_start":
+                        usage = (event.get("message") or {}).get("usage") or {}
+                        prompt_tokens = int(usage.get("input_tokens", 0) or 0)
+                    elif etype == "content_block_delta":
+                        delta = event.get("delta") or {}
+                        if delta.get("type") == "text_delta" and delta.get("text"):
+                            if first_token_at is None:
+                                first_token_at = time.perf_counter()
+                            yield {"type": "delta", "text": delta["text"]}
+                    elif etype == "message_delta":
+                        usage = event.get("usage") or {}
+                        completion_tokens = int(usage.get("output_tokens", 0) or 0)
+        except LLMError:
+            raise
+        except Exception as e:
+            logger.error("LLM 流式调用异常: %s", mask_secrets(str(e)))
+            raise LLMError(f"大模型流式调用失败: {mask_secrets(str(e))}") from e
+        end = time.perf_counter()
+        yield {
+            "type": "usage",
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "ttft_ms": int((first_token_at - start) * 1000) if first_token_at else None,
+            "latency_ms": int((end - start) * 1000),
+        }

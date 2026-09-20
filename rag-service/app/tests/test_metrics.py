@@ -178,3 +178,60 @@ def test_aggregate_includes_mrr():
     ]
     agg = aggregate(results)
     assert agg["mrr"] == 0.5
+
+
+# ---------------- nDCG@K ----------------
+def test_ndcg_first_position():
+    """首位命中: DCG=1/log2(2)=1, IDCG=1 → nDCG=1.0"""
+    from app.evaluation.metrics import ndcg_at_k
+    import math
+    sources = [_source(), _source("其他文档.md")]
+    assert ndcg_at_k(sources, "SQL注入防护指南.md", 5) == 1.0
+
+
+def test_ndcg_second_position_hand_computed():
+    """手算对拍: 命中在第 2 位 → nDCG = (1/log2(3)) / (1/log2(2)) = 1/1.58496"""
+    from app.evaluation.metrics import ndcg_at_k
+    import math
+    sources = [_source("无关文档A.md"), _source()]
+    expected = round((1.0 / math.log2(3)) / (1.0 / math.log2(2)), 4)
+    assert ndcg_at_k(sources, "SQL注入防护指南.md", 5) == expected
+
+
+def test_ndcg_miss_is_zero():
+    from app.evaluation.metrics import ndcg_at_k
+    sources = [_source("无关文档A.md"), _source("无关文档B.md")]
+    assert ndcg_at_k(sources, "SQL注入防护指南.md", 5) == 0.0
+
+
+def test_ndcg_respects_k_cutoff():
+    """命中位置超出 K 截断 → 0(与真实 Top-K 展示一致)"""
+    from app.evaluation.metrics import ndcg_at_k
+    sources = [_source("无关文档A.md"), _source("无关文档B.md"), _source()]
+    assert ndcg_at_k(sources, "SQL注入防护指南.md", 2) == 0.0
+    assert ndcg_at_k(sources, "SQL注入防护指南.md", 3) > 0
+
+
+def test_ndcg_no_expectation_is_none():
+    from app.evaluation.metrics import ndcg_at_k
+    assert ndcg_at_k([_source()], None, 5) is None
+
+
+def test_ndcg_ideal_ordering_beats_reversed():
+    """排序质量: 相关文档靠前 nDCG 更高(标准实现的区分度)"""
+    from app.evaluation.metrics import ndcg_at_k
+    good = [_source(), _source("无关文档A.md"), _source("无关文档B.md")]
+    bad = [_source("无关文档A.md"), _source("无关文档B.md"), _source()]
+    assert ndcg_at_k(good, "SQL注入防护指南.md", 3) > ndcg_at_k(bad, "SQL注入防护指南.md", 3)
+
+
+def test_aggregate_includes_ndcg_and_performance_detail():
+    results = [
+        {"error": None, "ndcg_at_k": 1.0, "rerank_used": True, "context_tokens": 800},
+        {"error": None, "ndcg_at_k": 0.5, "rerank_used": False, "context_tokens": 1200},
+        {"error": None, "ndcg_at_k": 0.0, "rerank_used": None, "context_tokens": None},
+    ]
+    agg = aggregate(results)
+    assert agg["ndcg_at_k"] == 0.5
+    assert agg["rerank_activation_rate"] == 0.5
+    assert agg["avg_context_tokens"] == 1000.0

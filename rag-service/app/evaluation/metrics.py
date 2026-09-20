@@ -1,5 +1,6 @@
 """评价指标计算: 检索指标 + 答案指标, 全部基于真实运行结果。"""
 import logging
+import math
 import re
 import statistics
 
@@ -68,6 +69,35 @@ def mrr(sources: list[dict], expected_source: str | None) -> float | None:
     return 0.0
 
 
+def ndcg_at_k(sources: list[dict], expected_source: str | None, top_k: int) -> float | None:
+    """nDCG@K: 折扣累计增益的标准实现(二值相关性)。
+
+    DCG@K  = Σ_{i=1..K} rel(i) / log2(i + 1)
+    IDCG@K = Σ_{i=1..min(K,R)} 1 / log2(i + 1), R = 相关文档总数
+
+    本数据集为单一期望来源(文档级标注), 故 R=1, IDCG@K = 1/log2(2) = 1,
+    nDCG 退化为首个命中位置的折扣倒数排名(带位置折减的 MRR)。该口径为
+    排序质量的标准度量; 无期望来源返回 None 不参与统计, 全未命中为 0.0。
+    """
+    if not expected_source:
+        return None
+    k = max(top_k, 1)
+    expected = expected_source.strip().lower()
+
+    def _relevant(s: dict) -> bool:
+        return expected in str(s.get("documentName", "")).lower() or expected in str(
+            s.get("source", "")
+        ).lower()
+
+    ranked = sources[:k]
+    relevant_count = sum(1 for s in ranked if _relevant(s))
+    if relevant_count == 0:
+        return 0.0
+    dcg = sum(1.0 / math.log2(i + 1) for i, s in enumerate(ranked, start=1) if _relevant(s))
+    idcg = sum(1.0 / math.log2(i + 1) for i in range(1, min(k, relevant_count) + 1))
+    return round(dcg / idcg, 4)
+
+
 def citation_validity(answer: str, sources: list[dict]) -> float | None:
     """引用编号有效率(Citation Validity): 回答中引用编号是否真实存在于返回的来源列表。
 
@@ -112,6 +142,7 @@ def aggregate(results: list[dict]) -> dict:
         _avg("retrieval_hit_rate", hits)
     _avg("precision_at_k", [r.get("precision_at_k") for r in completed])
     _avg("recall_at_k", [r.get("recall_at_k") for r in completed])
+    _avg("ndcg_at_k", [r.get("ndcg_at_k") for r in completed])
     _avg("mrr", [r.get("mrr") for r in completed])
     _avg("answer_keyword_accuracy", [r.get("keyword_hit_rate") for r in completed])
     _avg("citation_validity", [r.get("citation_matched") for r in completed])
@@ -122,5 +153,10 @@ def aggregate(results: list[dict]) -> dict:
     _avg("avg_total_tokens", [
         float(r.get("total_tokens") or (r.get("prompt_tokens", 0) + r.get("completion_tokens", 0)))
         for r in completed
+    ])
+    # ---- Performance Detail(仅自适应模式逐题记录, None 不参与统计) ----
+    _avg("rerank_activation_rate", [r.get("rerank_used") for r in completed])
+    _avg("avg_context_tokens", [
+        float(r["context_tokens"]) for r in completed if r.get("context_tokens") is not None
     ])
     return agg

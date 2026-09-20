@@ -46,6 +46,10 @@
               <el-input-number v-model="config.historyWindow" :min="0" :max="20" />
               <span class="hint">多轮对话携带的历史条数</span>
             </el-form-item>
+            <el-form-item label="Adaptive RAG">
+              <el-switch v-model="adaptiveEnabled" />
+              <span class="hint">安全实体查询分析 + 四路径自适应路由 + 置信度门控重排 + 动态上下文预算</span>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="saving" @click="onSave">保存配置</el-button>
               <el-button @click="load">重置</el-button>
@@ -105,6 +109,13 @@ const rerankerEnabled = computed({
   get: () => config.value?.enableReranker === 1,
   set: (v: boolean) => {
     if (config.value) config.value.enableReranker = v ? 1 : 0
+  },
+})
+
+const adaptiveEnabled = computed({
+  get: () => config.value?.adaptiveEnabled === 1,
+  set: (v: boolean) => {
+    if (config.value) config.value.adaptiveEnabled = v ? 1 : 0
   },
 })
 

@@ -27,9 +27,16 @@ public class EvalBatchResponse {
         private Boolean retrievalHit;
         private Double precisionAtK;
         private Double recallAtK;
+        private Double ndcgAtK;
         private Double mrr;
         private Double keywordHitRate;
         private Double citationMatched;
+        /** Performance Detail: 自适应路由 */
+        private String route;
+        /** Performance Detail: 是否触发重排(null = 非自适应不统计) */
+        private Boolean rerankUsed;
+        /** Performance Detail: 送入 LLM 的上下文 token 数(启发式估算) */
+        private Integer contextTokens;
         private String error;
     }
 
@@ -41,6 +48,7 @@ public class EvalBatchResponse {
         private Double retrievalHitRate;
         private Double precisionAtK;
         private Double recallAtK;
+        private Double ndcgAtK;
         private Double mrr;
         private Double answerKeywordAccuracy;
         /** 引用编号有效率(citation validity): [n] 是否指向真实返回来源, 非事实一致性验证 */
@@ -49,5 +57,9 @@ public class EvalBatchResponse {
         private Double avgGenerationTimeMs;
         private Double avgTotalTimeMs;
         private Double avgTotalTokens;
+        /** 重排激活率(自适应模式: 触发重排的题目占比) */
+        private Double rerankActivationRate;
+        /** 平均上下文 token 数(启发式估算口径) */
+        private Double avgContextTokens;
     }
 }

@@ -76,3 +76,47 @@ class OpenAICompatibleLLM(BaseLLM):
             model=self.model,
             latency_ms=latency,
         )
+
+    def chat_stream(
+        self,
+        messages: list[LLMMessage],
+        temperature: float = 0.3,
+        max_tokens: int | None = None,
+    ):
+        """SSE 流式补全(OpenAI 兼容): 逐 token yield, 记录 TTFT。"""
+        self._ensure_client()
+        payload = [{"role": m.role, "content": m.content} for m in messages]
+        start = time.perf_counter()
+        first_token_at: float | None = None
+        usage = None
+        try:
+            stream = self._client.chat.completions.create(
+                model=self.model,
+                messages=payload,
+                temperature=temperature,
+                max_tokens=max_tokens or self._max_tokens,
+                stream=True,
+                stream_options={"include_usage": True},  # 部分兼容端点不支持时自动忽略
+            )
+            for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    usage = chunk.usage
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                text = getattr(delta, "content", None)
+                if text:
+                    if first_token_at is None:
+                        first_token_at = time.perf_counter()
+                    yield {"type": "delta", "text": text}
+        except Exception as e:
+            logger.error("LLM 流式调用失败: %s", mask_secrets(str(e)))
+            raise LLMError(f"大模型流式调用失败: {mask_secrets(str(e))}") from e
+        end = time.perf_counter()
+        yield {
+            "type": "usage",
+            "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+            "completion_tokens": getattr(usage, "completion_tokens", 0) or 0,
+            "ttft_ms": int((first_token_at - start) * 1000) if first_token_at else None,
+            "latency_ms": int((end - start) * 1000),
+        }

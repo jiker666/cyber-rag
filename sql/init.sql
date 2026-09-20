@@ -117,6 +117,7 @@ CREATE TABLE `message` (
     `role`            VARCHAR(10) NOT NULL COMMENT '角色: user/assistant',
     `content`         TEXT COMMENT '消息内容',
     `sources`         JSON     DEFAULT NULL COMMENT '引用来源JSON',
+    `trace`           TEXT     COMMENT '本次 RAG 决策轨迹 JSON(阶段耗时/路由/门控/缓存)',
     `retrieval_time`  INT      NOT NULL DEFAULT 0 COMMENT '检索耗时(ms)',
     `generation_time` INT      NOT NULL DEFAULT 0 COMMENT '生成耗时(ms)',
     `total_tokens`    INT      NOT NULL DEFAULT 0 COMMENT 'Token 使用量',
@@ -139,6 +140,7 @@ CREATE TABLE `qa_record` (
     `question`          TEXT COMMENT '问题',
     `answer`            TEXT COMMENT '回答',
     `sources`           JSON     DEFAULT NULL COMMENT '引用来源JSON',
+    `trace`             TEXT     COMMENT '本次 RAG 决策轨迹 JSON(阶段耗时/路由/门控/缓存)',
     `retrieval_time`    INT      NOT NULL DEFAULT 0 COMMENT '检索耗时(ms)',
     `generation_time`   INT      NOT NULL DEFAULT 0 COMMENT '生成耗时(ms)',
     `total_time`        INT      NOT NULL DEFAULT 0 COMMENT '总耗时(ms)',
@@ -277,9 +279,13 @@ CREATE TABLE `evaluation_result` (
     `retrieval_hit`     TINYINT      DEFAULT NULL COMMENT '检索是否命中期望来源: 1是 0否 NULL未评',
     `precision_at_k`    DECIMAL(5,4) DEFAULT NULL COMMENT '标准 Precision@K: Top-K 截断内相关片段数/K',
     `recall_at_k`       DECIMAL(5,4) DEFAULT NULL COMMENT 'Recall@K',
+    `ndcg_at_k`         DECIMAL(5,4) DEFAULT NULL COMMENT 'nDCG@K 折扣累计增益(二值相关性标准实现)',
     `mrr`               DECIMAL(5,4) DEFAULT NULL COMMENT 'MRR 平均倒数排名',
     `keyword_hit_rate`  DECIMAL(5,4) DEFAULT NULL COMMENT '关键词命中率',
     `citation_matched`  TINYINT      DEFAULT NULL COMMENT '引用编号有效率>0.5 二值化: 1有效 0无效(仅校验编号存在, 非事实一致性)',
+    `route`             VARCHAR(20) DEFAULT NULL COMMENT 'Performance Detail: 自适应路由(非自适应为NULL)',
+    `rerank_used`       TINYINT     DEFAULT NULL COMMENT 'Performance Detail: 是否触发重排(非自适应为NULL)',
+    `context_tokens`    INT         DEFAULT NULL COMMENT 'Performance Detail: 上下文 token 数(启发式估算)',
     `manual_correctness`   TINYINT   DEFAULT 0 COMMENT '人工正确性评分 1-5, 0未评',
     `manual_relevance`     TINYINT   DEFAULT 0 COMMENT '人工相关性评分 1-5, 0未评',
     `manual_completeness`  TINYINT   DEFAULT 0 COMMENT '人工完整性评分 1-5, 0未评',
@@ -314,8 +320,9 @@ INSERT INTO `knowledge_base` (`id`, `name`, `description`, `category`, `cover_co
 (3, 'API安全知识库', 'OWASP API Security Top 10、BOLA、BFLA、API 认证与限流', 'API安全', '#67C23A', 1);
 
 INSERT INTO `rag_config` (`id`, `chunk_size`, `chunk_overlap`, `top_k`, `temperature`, `score_threshold`,
-                          `enable_reranker`, `rerank_top_n`, `retrieval_strategy`, `history_window`, `updated_by`) VALUES
-(1, 512, 100, 5, 0.30, 0.300, 0, 3, 'vector', 6, 1);
+                          `enable_reranker`, `rerank_top_n`, `retrieval_strategy`, `history_window`,
+                          `adaptive_enabled`, `updated_by`) VALUES
+(1, 512, 100, 5, 0.30, 0.300, 0, 3, 'vector', 6, 0, 1);
 
 INSERT INTO `evaluation_dataset` (`id`, `name`, `description`, `created_by`) VALUES
 (1, '网络安全问答基准集', '覆盖 SQL 注入/XSS/CSRF/JWT/API 安全等核心知识点的评测题目', 1);

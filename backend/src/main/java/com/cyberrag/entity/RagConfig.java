@@ -22,6 +22,8 @@ public class RagConfig {
     private Integer rerankTopN;
     private String retrievalStrategy;
     private Integer historyWindow;
+    /** Adaptive RAG 总开关(查询分析+路由+门控+动态上下文): 0 关 1 开 */
+    private Integer adaptiveEnabled;
     private Long updatedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

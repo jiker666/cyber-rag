@@ -223,3 +223,51 @@ def test_internal_token_required(monkeypatch, fake_embedding, fake_llm):
             assert "apiKey" not in str(resp.json())
     finally:
         get_settings().rag_internal_token = ""
+
+
+# ---------------- SSE 流式问答 ----------------
+def test_chat_stream_sse_events(client):
+    import json
+
+    resp = client.post(
+        "/api/chat/stream",
+        json={"question": "如何防御 SQL 注入", "knowledgeBaseIds": [1]},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+
+    events = [
+        json.loads(line[len("data: "):])
+        for line in resp.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    types = [e["type"] for e in events]
+    assert types[0] == "analysis"
+    assert types[1] == "retrieval"
+    assert "delta" in types
+    assert types[-1] == "done"
+    done = events[-1]["result"]
+    assert done["answer"]
+    assert "trace" in done and "route" in done and "confidence" in done
+    assert done["sources"][0]["documentName"] == "SQL注入防护指南.md"
+
+
+def test_chat_query_returns_adaptive_fields(client):
+    resp = client.post(
+        "/api/chat/query",
+        json={"question": "如何防御 SQL 注入", "knowledgeBaseIds": [1], "adaptive": False},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"] if "data" in resp.json() else resp.json()
+    # 响应结构兼容旧字段 + 新增 trace/analysis/confidence
+    for key in ("answer", "sources", "trace", "analysis", "confidence"):
+        assert key in data
+
+
+def test_config_endpoint_includes_adaptive_and_caches(client):
+    resp = client.get("/api/config")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "adaptive" in data
+    assert data["adaptive"]["thresholds"]["rerankConfidence"] > 0
+    assert "caches" in data

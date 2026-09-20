@@ -48,6 +48,7 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         current.setRerankTopN(config.getRerankTopN());
         current.setRetrievalStrategy(normalizeStrategy(config.getRetrievalStrategy()));
         current.setHistoryWindow(config.getHistoryWindow());
+        current.setAdaptiveEnabled(config.getAdaptiveEnabled());
         current.setUpdatedBy(AuthContext.getUserId());
         if (current.getId() == null) {
             current.setId(1L);
@@ -55,9 +56,9 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         } else {
             configMapper.updateById(current);
         }
-        log.info("RAG 配置已更新: topK={}, chunkSize={}, overlap={}, strategy={}, reranker={}",
+        log.info("RAG 配置已更新: topK={}, chunkSize={}, overlap={}, strategy={}, reranker={}, adaptive={}",
                 current.getTopK(), current.getChunkSize(), current.getChunkOverlap(),
-                current.getRetrievalStrategy(), current.getEnableReranker());
+                current.getRetrievalStrategy(), current.getEnableReranker(), current.getAdaptiveEnabled());
         return current;
     }
 
@@ -97,6 +98,9 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         if (c.getEnableReranker() == null) {
             c.setEnableReranker(0);
         }
+        if (c.getAdaptiveEnabled() == null) {
+            c.setAdaptiveEnabled(0);
+        }
     }
 
     private RagConfig defaultConfig() {
@@ -111,6 +115,7 @@ public class RagConfigServiceImpl extends ServiceImpl<RagConfigMapper, RagConfig
         c.setRerankTopN(3);
         c.setRetrievalStrategy("vector");
         c.setHistoryWindow(6);
+        c.setAdaptiveEnabled(0);
         return c;
     }
 }

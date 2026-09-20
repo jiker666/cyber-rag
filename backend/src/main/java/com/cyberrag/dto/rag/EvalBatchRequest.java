@@ -22,6 +22,12 @@ public class EvalBatchRequest {
         private Boolean enableReranker;
         private Integer rerankTopN;
         private String retrievalStrategy;
+        // ---- Adaptive RAG(消融实验开关) ----
+        private Boolean adaptive;
+        private Boolean entityBoost;
+        private Boolean rerankGating;
+        private Boolean dynamicContext;
+        private Boolean useCaches;
     }
 
     @Data

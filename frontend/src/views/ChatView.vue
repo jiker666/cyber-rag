@@ -86,20 +86,39 @@
           <div class="bubble">
             <MarkdownView class="chat-text" :source="msg.content" />
             <SourceList v-if="msg.role === 'assistant' && msg.sources?.length" :sources="msg.sources" />
+            <div v-if="msg.role === 'assistant' && confOf(msg.id)" class="conf-row">
+              <el-tag size="small" :type="confTagType(confOf(msg.id)!.level)" effect="plain">
+                证据置信度: {{ confOf(msg.id)!.label }}
+                ({{ (confOf(msg.id)!.retrievalConfidence * 100).toFixed(1) }}%)
+              </el-tag>
+            </div>
             <div v-if="msg.role === 'assistant'" class="msg-footer">
               <span class="meta">检索 {{ msg.retrievalTime }}ms · 生成 {{ msg.generationTime }}ms</span>
+              <span v-if="msg.trace?.llmTtftMs" class="meta">首字 {{ msg.trace.llmTtftMs }}ms</span>
               <span v-if="msg.totalTokens" class="meta">{{ msg.totalTokens }} tokens</span>
             </div>
+            <RagTracePanel
+              v-if="msg.role === 'assistant' && msg.trace"
+              :trace="msg.trace"
+              :analysis="extras[msg.id]?.analysis"
+              :default-open="userStore.isAdmin"
+            />
           </div>
         </div>
 
         <div v-if="asking" class="msg-row assistant">
           <div class="avatar"><el-icon :size="20" color="#d97757"><Shield /></el-icon></div>
           <div class="bubble">
-            <div class="typing">
+            <!-- 阶段提示: 正在检索 → 正在组织证据 → 正在生成 -->
+            <div v-if="!streamContent" class="typing">
               <span></span><span></span><span></span>
-              <em>正在检索知识库并生成回答…</em>
+              <em>{{ stageText }}</em>
             </div>
+            <template v-else>
+              <div class="stage-caption">{{ stageText }}</div>
+              <MarkdownView class="chat-text streaming" :source="streamContent" />
+              <span class="stream-cursor"></span>
+            </template>
           </div>
         </div>
       </div>
@@ -137,19 +156,24 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MarkdownView from '@/components/MarkdownView.vue'
 import SourceList from '@/components/SourceList.vue'
+import RagTracePanel from '@/components/RagTracePanel.vue'
 import {
-  ask, regenerate, listMessages, clearMessages, pageConversations,
-  type MessageItem, type ConversationItem,
+  askStream, regenerate, listMessages, clearMessages, pageConversations,
+  type MessageItem, type ConversationItem, type QueryAnalysis, type EvidenceConfidence,
 } from '@/api/chat'
 import { listEnabledKb, type KnowledgeBase } from '@/api/kb'
+import { useUserStore } from '@/stores/user'
 
+const userStore = useUserStore()
 const conversations = ref<ConversationItem[]>([])
 const conversationId = ref<number | null>(null)
 const messages = ref<MessageItem[]>([])
+/** 当前会话消息的附加数据(置信度/分析), done 事件携带, 不入库 */
+const extras = ref<Record<number, { analysis?: QueryAnalysis | null; confidence?: EvidenceConfidence | null }>>({})
 const kbList = ref<KnowledgeBase[]>([])
 const knowledgeBaseId = ref<number | null>(null)
 const question = ref('')
@@ -157,6 +181,28 @@ const asking = ref(false)
 const topK = ref(5)
 const temperature = ref(0.3)
 const scrollRef = ref<HTMLDivElement>()
+
+/** 流式状态: 阶段提示 + 已生成的增量文本 */
+type StreamStage = 'retrieving' | 'evidencing' | 'generating'
+const streamStage = ref<StreamStage>('retrieving')
+const streamContent = ref('')
+const STAGE_TEXT: Record<StreamStage, string> = {
+  retrieving: '正在检索知识库…',
+  evidencing: '正在组织证据…',
+  generating: '正在生成回答…',
+}
+const stageText = computed(() => STAGE_TEXT[streamStage.value])
+
+function confTagType(level: string): 'success' | 'warning' | 'danger' {
+  if (level === 'sufficient') return 'success'
+  if (level === 'moderate') return 'warning'
+  return 'danger'
+}
+
+/** 消息的证据置信度(不存在返回 null, 模板判空) */
+function confOf(id: number): EvidenceConfidence | null {
+  return extras.value[id]?.confidence ?? null
+}
 
 const quickQuestions = [
   'SQL 注入的攻击原理是什么?',
@@ -193,6 +239,8 @@ async function onAsk() {
   const q = question.value.trim()
   if (!q || asking.value || !knowledgeBaseId.value) return
   asking.value = true
+  streamStage.value = 'retrieving'
+  streamContent.value = ''
   // 立即渲染用户消息
   messages.value.push({
     id: -Date.now(),
@@ -200,6 +248,7 @@ async function onAsk() {
     role: 'user',
     content: q,
     sources: null,
+    trace: null,
     retrievalTime: 0,
     generationTime: 0,
     totalTokens: 0,
@@ -207,33 +256,66 @@ async function onAsk() {
   })
   question.value = ''
   scrollToBottom()
-  try {
-    const result = await ask({
+
+  let firstDelta = true
+  await askStream(
+    {
       question: q,
       conversationId: conversationId.value,
       knowledgeBaseId: knowledgeBaseId.value,
       topK: topK.value,
       temperature: temperature.value,
-    })
-    conversationId.value = result.conversationId
-    messages.value.push({
-      id: result.assistantMessageId,
-      conversationId: result.conversationId,
-      role: 'assistant',
-      content: result.response.answer,
-      sources: result.response.sources,
-      retrievalTime: result.response.retrievalTime,
-      generationTime: result.response.generationTime,
-      totalTokens: result.response.totalTokens,
-      createdAt: new Date().toISOString(),
-    })
-    loadConversations()
-  } catch {
-    messages.value = messages.value.filter((m) => m.id > 0 || m.role === 'user')
-  } finally {
-    asking.value = false
-    scrollToBottom()
-  }
+    },
+    {
+      onStart: (e) => {
+        conversationId.value = e.conversationId
+        // 用户消息的临时负数 ID 替换为真实 ID
+        const userMsg = messages.value[messages.value.length - 1]
+        if (userMsg?.role === 'user' && userMsg.id < 0) userMsg.id = e.userMessageId
+      },
+      onRetrieval: () => {
+        streamStage.value = 'evidencing'
+      },
+      onDelta: (text) => {
+        if (firstDelta) {
+          firstDelta = false
+          streamStage.value = 'generating'
+        }
+        streamContent.value += text
+        scrollToBottom()
+      },
+      onDone: (e) => {
+        const r = e.response
+        messages.value.push({
+          id: e.assistantMessageId,
+          conversationId: conversationId.value ?? 0,
+          role: 'assistant',
+          content: r.answer,
+          sources: r.sources,
+          trace: r.trace,
+          retrievalTime: r.retrievalTime,
+          generationTime: r.generationTime,
+          totalTokens: r.totalTokens,
+          createdAt: new Date().toISOString(),
+        })
+        if (e.assistantMessageId) {
+          extras.value[e.assistantMessageId] = {
+            analysis: r.analysis,
+            confidence: r.confidence,
+          }
+        }
+        loadConversations()
+      },
+      onError: (msg) => {
+        ElMessage.error(msg)
+      },
+    },
+  )
+
+  // 流结束: 清空流式展示区(成功时完整消息已入列, 失败时保留用户消息)
+  asking.value = false
+  streamContent.value = ''
+  scrollToBottom()
 }
 
 function askQuick(q: string) {
@@ -487,6 +569,36 @@ onMounted(async () => {
 @keyframes blink {
   0%, 80%, 100% { opacity: 0.25; }
   40% { opacity: 1; }
+}
+
+/* 流式生成中: 阶段提示 + 末尾光标 */
+.stage-caption {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.stage-caption::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 1.2s infinite;
+}
+.stream-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: blink 1s infinite;
+}
+.conf-row {
+  margin-top: 8px;
 }
 
 .chat-input {

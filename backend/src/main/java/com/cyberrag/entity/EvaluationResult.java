@@ -30,9 +30,16 @@ public class EvaluationResult {
     private Integer retrievalHit;
     private BigDecimal precisionAtK;
     private BigDecimal recallAtK;
+    private BigDecimal ndcgAtK;
     private BigDecimal mrr;
     private BigDecimal keywordHitRate;
     private Integer citationMatched;
+    /** Performance Detail: 自适应路由(非自适应为 NULL) */
+    private String route;
+    /** Performance Detail: 是否触发重排(非自适应为 NULL) */
+    private Integer rerankUsed;
+    /** Performance Detail: 上下文 token 数(启发式估算) */
+    private Integer contextTokens;
     private Integer manualCorrectness;
     private Integer manualRelevance;
     private Integer manualCompleteness;

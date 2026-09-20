@@ -25,6 +25,12 @@ public class ChatRequest {
     private String retrievalStrategy;
     private Integer historyWindow;
     private List<HistoryMsg> history;
+    // ---- Adaptive RAG 开关(null = 跟随 rag-service 全局配置) ----
+    private Boolean adaptive;
+    private Boolean entityBoost;
+    private Boolean rerankGating;
+    private Boolean dynamicContext;
+    private Boolean useCaches;
 
     @Data
     @NoArgsConstructor

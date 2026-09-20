@@ -18,6 +18,8 @@ public class Message {
     private String content;
     /** 引用来源 JSON 数组 */
     private String sources;
+    /** 本次 RAG 决策轨迹 JSON(阶段耗时/路由/门控/缓存) */
+    private String trace;
     private Integer retrievalTime;
     private Integer generationTime;
     private Integer totalTokens;

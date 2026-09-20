@@ -2,6 +2,7 @@ package com.cyberrag.integration;
 
 import com.cyberrag.common.exception.BusinessException;
 import com.cyberrag.config.AppProperties;
+import com.cyberrag.util.JsonUtil;
 import com.cyberrag.dto.rag.ChatRequest;
 import com.cyberrag.dto.rag.ChatResponse;
 import com.cyberrag.dto.rag.EvalBatchRequest;
@@ -152,6 +153,73 @@ public class RagServiceClient {
     public ChatResponse chatQuery(ChatRequest request) {
         Map<String, Object> body = doRequest("/api/chat/query", HttpMethod.POST, request, null);
         return parse(body, ChatResponse.class);
+    }
+
+    /**
+     * 流式问答: 转发 rag-service 的 SSE 事件流(analysis/retrieval/delta/done)。
+     *
+     * 阻塞式逐行读取(调用方应在独立线程执行), 每解析到一个事件回调 onEvent。
+     * JDK HttpClient 直连, 不走 RestTemplate(SseEmitter 场景需要边收边推)。
+     */
+    public void chatQueryStream(ChatRequest request, java.util.function.Consumer<Map<String, Object>> onEvent) {
+        java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(url("/api/chat/stream")))
+                .timeout(java.time.Duration.ofSeconds(30))
+                .header("Content-Type", "application/json")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(JsonUtil.toJson(request)));
+        if (!properties.getRag().getInternalToken().isEmpty()) {
+            builder.header("X-Internal-Token", properties.getRag().getInternalToken());
+        }
+        java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(10))
+                // 强制 HTTP/1.1: 默认 HTTP/2 会先发 h2c 升级请求(Connection: Upgrade),
+                // uvicorn/h11 对携带升级头的 POST 不读请求体, 导致 rag-service 报 422 body missing
+                .version(java.net.http.HttpClient.Version.HTTP_1_1)
+                .build();
+        try {
+            java.net.http.HttpResponse<java.io.InputStream> resp =
+                    client.send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofInputStream());
+            if (resp.statusCode() != 200) {
+                String body = new String(resp.body().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                throw new BusinessException(resp.statusCode(), "AI 服务错误: " + body.substring(0, Math.min(body.length(), 300)));
+            }
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(resp.body(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String payload = ssePayload(line);
+                    if (payload == null || payload.isEmpty()) {
+                        continue;
+                    }
+                    try {
+                        onEvent.accept(com.cyberrag.util.JsonUtil.fromJson(payload,
+                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                }));
+                    } catch (Exception parseEx) {
+                        log.warn("SSE 事件解析失败: {}", payload.substring(0, Math.min(80, payload.length())));
+                    }
+                }
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (java.io.IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            log.error("RAG 流式服务调用失败: {}", e.getMessage());
+            throw new BusinessException(503, "AI 流式服务不可用: " + e.getMessage());
+        }
+    }
+
+    /** SSE 行 → JSON 负载(非 data 行返回 null) */
+    private static String ssePayload(String line) {
+        if (line.startsWith("data: ")) {
+            return line.substring("data: ".length()).trim();
+        }
+        if (line.startsWith("data:")) {
+            return line.substring("data:".length()).trim();
+        }
+        return null;
     }
 
     public ChatResponse llmOnly(LlmOnlyRequest request) {

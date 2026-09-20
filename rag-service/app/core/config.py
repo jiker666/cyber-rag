@@ -58,6 +58,33 @@ class Settings(BaseSettings):
     default_score_threshold: float = 0.3
     default_history_window: int = 6
 
+    # ---- Security-Aware Adaptive RAG ----
+    # 自适应总开关(请求级 adaptive 参数可覆盖)
+    adaptive_enabled: bool = False
+    # 精确实体强匹配加权(EXACT 路由下命中 CVE/CWE 等编号的 RRF 确定性加分)
+    entity_boost_enabled: bool = True
+    # Confidences-aware Reranker Gating 阈值
+    rerank_confidence_threshold: float = 0.75  # top1 相似度高于此 → 高置信
+    rerank_score_margin_threshold: float = 0.08  # top1-top2 分差高于此 → 排序稳定
+    rerank_agreement_threshold: float = 0.6  # vector/BM25 Top-5 重合率高于此 → 双路一致
+    complexity_threshold: float = 7.5  # 复杂度(0-10)达到此值才允许多跳分解
+    # FAST 路由(简单事实题向量直出)判定阈值
+    fast_path_top1_min: float = 0.72
+    fast_path_margin_min: float = 0.10
+    # Dynamic Context Budget
+    max_context_tokens: int = 3000  # 送入 LLM 的上下文 Token 预算(估算口径)
+    min_context_chunks: int = 2
+    max_context_chunks: int = 6
+    # Cache
+    embedding_cache_size: int = 512
+    retrieval_cache_size: int = 256
+    # 启动预热(避免首问 5s/后续 1s 的答辩体验问题)
+    warmup_enabled: bool = True
+    # Small-to-Large(parent-child)分块参数
+    parent_chunk_size: int = 1024
+    child_chunk_size: int = 320
+    child_chunk_overlap: int = 60
+
     # 上传
     upload_dir: str = str(BASE_DIR / "data" / "uploads")
     max_file_size_mb: int = 20

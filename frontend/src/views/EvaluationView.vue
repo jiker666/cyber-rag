@@ -43,16 +43,36 @@
         <el-form-item label="Temperature">
           <el-input-number v-model="runForm.temperature" :min="0" :max="2" :step="0.1" style="width: 110px" />
         </el-form-item>
+        <el-form-item v-if="runForm.mode === 'RAG_LLM'" label="Adaptive">
+          <el-switch v-model="runForm.adaptive" />
+          <span class="form-hint">Security-Aware 自适应检索(路由+门控+动态上下文)</span>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="running" @click="onRun">
             <el-icon><VideoPlay /></el-icon>&nbsp;运行实验
           </el-button>
         </el-form-item>
       </el-form>
+      <!-- Adaptive 消融开关(仅 RAG + Adaptive 模式有意义; 不勾选 = 跟随全局配置) -->
+      <el-form
+        v-if="runForm.mode === 'RAG_LLM' && runForm.adaptive"
+        :model="runForm"
+        label-width="110px"
+        inline
+        class="ablation-form"
+      >
+        <el-form-item label="消融开关">
+          <el-checkbox v-model="runForm.entityBoost">实体加权</el-checkbox>
+          <el-checkbox v-model="runForm.rerankGating">门控重排</el-checkbox>
+          <el-checkbox v-model="runForm.dynamicContext">动态上下文</el-checkbox>
+          <el-checkbox v-model="runForm.useCaches">缓存</el-checkbox>
+        </el-form-item>
+      </el-form>
       <el-alert type="info" :closable="false">
         <template #title>
           提示: 同一数据集分别以 LLM Only 与 RAG+LLM 运行即可完成实验一; 固定其他参数, 依次设置
-          K=1/3/5/10 运行 RAG 任务即完成 Top-K 实验。所有指标均来自真实运行结果。
+          K=1/3/5/10 运行 RAG 任务即完成 Top-K 实验; Adaptive 消融实验取消勾选对应开关(不勾选即该模块关闭),
+          对比实验请保持"缓存"关闭以测真实延迟。所有指标均来自真实运行结果。
         </template>
       </el-alert>
     </el-card>
@@ -82,9 +102,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="参数" width="150" align="center">
+        <el-table-column label="参数" width="180" align="center">
           <template #default="{ row }">
             <span class="mono">K={{ row.topK }}{{ row.chunkSize ? ` · CS=${row.chunkSize}` : '' }}{{ row.retrievalStrategy === 'hybrid' ? ' · 混合' : '' }}{{ row.enableReranker === 1 ? ' · 重排' : '' }}</span>
+            <el-tag v-if="row.adaptiveEnabled === 1" type="primary" size="small" effect="plain" style="margin-left: 4px">自适应</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="进度" width="110" align="center">
@@ -127,6 +148,11 @@
                 </el-tooltip>
               </el-descriptions-item>
               <el-descriptions-item label="Recall@K">{{ pct(summary.metrics?.recallAtK) }}</el-descriptions-item>
+              <el-descriptions-item label="nDCG@K">
+                <el-tooltip content="折扣累计增益(二值相关性标准实现: 期望来源出现在第 r 位计 1/log2(r+1), 按 IDCG 归一)" placement="top">
+                  <span>{{ pct(summary.metrics?.ndcgAtK) }}</span>
+                </el-tooltip>
+              </el-descriptions-item>
               <el-descriptions-item label="答案关键词准确率">{{ pct(summary.metrics?.answerKeywordAccuracy) }}</el-descriptions-item>
               <el-descriptions-item label="引用编号有效率">
                 <el-tooltip
@@ -139,6 +165,25 @@
               <el-descriptions-item label="平均总耗时">{{ ms(summary.metrics?.avgTotalTimeMs) }}</el-descriptions-item>
               <el-descriptions-item label="平均检索耗时">{{ ms(summary.metrics?.avgRetrievalTimeMs) }}</el-descriptions-item>
               <el-descriptions-item label="平均生成耗时">{{ ms(summary.metrics?.avgGenerationTimeMs) }}</el-descriptions-item>
+            </el-descriptions>
+          </div>
+          <!-- Performance Detail: 仅自适应任务逐题记录(非自适应任务无值) -->
+          <div class="metric-box" v-if="summary.metrics?.rerankActivationRate != null || summary.metrics?.avgContextTokens != null">
+            <div class="m-title">Performance Detail (自适应)</div>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="重排激活率">
+                <el-tooltip content="触发交叉编码器重排的题目占比(门控目标: 低调用率下保持检索质量)" placement="top">
+                  <span>{{ pct(summary.metrics?.rerankActivationRate) }}</span>
+                </el-tooltip>
+              </el-descriptions-item>
+              <el-descriptions-item label="平均上下文 Token">
+                <el-tooltip content="送入 LLM 的上下文规模(启发式估算口径), 反映动态上下文预算的裁剪效果" placement="top">
+                  <span>{{ summary.metrics?.avgContextTokens?.toFixed(0) ?? '-' }}</span>
+                </el-tooltip>
+              </el-descriptions-item>
+              <el-descriptions-item label="路由分布" :span="2">
+                <span class="mono">{{ routeDistribution(detailResults) || '-' }}</span>
+              </el-descriptions-item>
             </el-descriptions>
           </div>
           <div class="metric-box" v-if="summary.manualMetrics">
@@ -179,8 +224,28 @@
           <el-table-column label="P@K" width="70" align="center">
             <template #default="{ row }">{{ row.precisionAtK != null ? row.precisionAtK.toFixed(2) : '-' }}</template>
           </el-table-column>
+          <el-table-column label="nDCG@K" width="80" align="center">
+            <template #default="{ row }">{{ row.ndcgAtK != null ? row.ndcgAtK.toFixed(2) : '-' }}</template>
+          </el-table-column>
           <el-table-column label="关键词" width="80" align="center">
             <template #default="{ row }">{{ row.keywordHitRate != null ? (row.keywordHitRate * 100).toFixed(0) + '%' : '-' }}</template>
+          </el-table-column>
+          <!-- Performance Detail: 自适应路由 / 门控重排 / 动态上下文规模 -->
+          <el-table-column label="路由" width="92" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.route" :type="routeTagType(row.route)" size="small" effect="plain">{{ row.route }}</el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="重排" width="62" align="center">
+            <template #default="{ row }">
+              <span v-if="row.rerankUsed === 1" class="ok">✓</span>
+              <span v-else-if="row.rerankUsed === 0" class="skip-mark">跳过</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="上下文Token" width="92" align="center">
+            <template #default="{ row }">{{ row.contextTokens != null ? row.contextTokens : '-' }}</template>
           </el-table-column>
           <el-table-column label="引用" width="70" align="center">
             <template #default="{ row }">
@@ -241,9 +306,9 @@
         <el-table-column prop="name" label="任务" min-width="140" fixed="left" />
         <el-table-column prop="mode" label="模式" width="100" align="center" />
         <el-table-column prop="topK" label="K" width="50" align="center" />
-        <el-table-column label="策略" width="86" align="center">
+        <el-table-column label="策略" width="96" align="center">
           <template #default="{ row }">
-            <span>{{ row.retrievalStrategy === 'hybrid' ? '混合' : '向量' }}{{ row.enableReranker === 1 ? '+重排' : '' }}</span>
+            <span>{{ row.retrievalStrategy === 'hybrid' ? '混合' : '向量' }}{{ row.enableReranker === 1 ? '+重排' : '' }}{{ row.adaptiveEnabled === 1 ? '+自适应' : '' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="检索命中率" width="100" align="center">
@@ -251,6 +316,9 @@
         </el-table-column>
         <el-table-column label="P@K" width="80" align="center">
           <template #default="{ row }">{{ pct(row.metrics?.precisionAtK) }}</template>
+        </el-table-column>
+        <el-table-column label="nDCG@K" width="82" align="center">
+          <template #default="{ row }">{{ pct(row.metrics?.ndcgAtK) }}</template>
         </el-table-column>
         <el-table-column label="MRR" width="72" align="center">
           <template #default="{ row }">{{ pct(row.metrics?.mrr) }}</template>
@@ -261,11 +329,17 @@
         <el-table-column label="引用编号有效率" width="110" align="center">
           <template #default="{ row }">{{ pct(citationOf(row.metrics)) }}</template>
         </el-table-column>
+        <el-table-column label="重排激活率" width="92" align="center">
+          <template #default="{ row }">{{ pct(row.metrics?.rerankActivationRate) }}</template>
+        </el-table-column>
         <el-table-column label="平均耗时" width="95" align="center">
           <template #default="{ row }">{{ ms(row.metrics?.avgTotalTimeMs) }}</template>
         </el-table-column>
         <el-table-column label="平均Token" width="95" align="center">
           <template #default="{ row }">{{ row.metrics?.avgTotalTokens?.toFixed(0) ?? '-' }}</template>
+        </el-table-column>
+        <el-table-column label="上下文Token" width="95" align="center">
+          <template #default="{ row }">{{ row.metrics?.avgContextTokens?.toFixed(0) ?? '-' }}</template>
         </el-table-column>
       </el-table>
     </el-dialog>
@@ -300,8 +374,15 @@ const runForm = reactive<{
   temperature: number
   retrievalStrategy: string
   enableReranker: boolean
+  adaptive: boolean
+  entityBoost: boolean
+  rerankGating: boolean
+  dynamicContext: boolean
+  useCaches: boolean
 }>({ name: '', mode: 'RAG_LLM', datasetId: null, knowledgeBaseId: null, topK: 5, temperature: 0.3,
-  retrievalStrategy: 'vector', enableReranker: false })
+  retrievalStrategy: 'vector', enableReranker: false,
+  // 消融默认: 三模块全开, 缓存关闭(E5 对比实验统一 use_caches=false 测真实延迟)
+  adaptive: false, entityBoost: true, rerankGating: true, dynamicContext: true, useCaches: false })
 
 const detailVisible = ref(false)
 const detailTitle = ref('')
@@ -333,6 +414,20 @@ function taskStatusType(s: string) {
 }
 function taskStatusText(s: string) {
   return { COMPLETED: '已完成', FAILED: '失败', RUNNING: '运行中', PENDING: '等待' }[s] || s
+}
+
+/** 自适应路由标签配色 */
+function routeTagType(route: string) {
+  return ({ EXACT: 'success', FAST: 'primary', HYBRID: 'warning', DECOMPOSE: 'danger' } as Record<string, any>)[route] || 'info'
+}
+
+/** 详情结果的四路径路由分布, 如 "FAST×6 HYBRID×7 EXACT×2" */
+function routeDistribution(results: EvalResult[]): string {
+  const counts = new Map<string, number>()
+  for (const r of results) {
+    if (r.route) counts.set(r.route, (counts.get(r.route) || 0) + 1)
+  }
+  return [...counts.entries()].map(([k, v]) => `${k}×${v}`).join('  ')
 }
 
 async function loadTasks() {
@@ -370,6 +465,11 @@ async function onRun() {
       temperature: runForm.temperature,
       retrievalStrategy: runForm.mode === 'RAG_LLM' ? runForm.retrievalStrategy : undefined,
       enableReranker: runForm.mode === 'RAG_LLM' ? runForm.enableReranker : undefined,
+      adaptive: runForm.mode === 'RAG_LLM' ? runForm.adaptive : undefined,
+      entityBoost: runForm.mode === 'RAG_LLM' && runForm.adaptive ? runForm.entityBoost : undefined,
+      rerankGating: runForm.mode === 'RAG_LLM' && runForm.adaptive ? runForm.rerankGating : undefined,
+      dynamicContext: runForm.mode === 'RAG_LLM' && runForm.adaptive ? runForm.dynamicContext : undefined,
+      useCaches: runForm.mode === 'RAG_LLM' && runForm.adaptive ? runForm.useCaches : undefined,
     })
     ElMessage.success('任务已创建, 正在后台运行')
     loadTasks()
@@ -501,5 +601,17 @@ onMounted(async () => {
 }
 .result-table {
   width: 100%;
+}
+.form-hint {
+  margin-left: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.ablation-form {
+  margin-top: -12px;
+}
+.skip-mark {
+  color: var(--text-secondary);
+  font-size: 11.5px;
 }
 </style>

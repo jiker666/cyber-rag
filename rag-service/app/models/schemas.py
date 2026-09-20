@@ -11,6 +11,7 @@ class IngestTextRequest(BaseModel):
     text: str = Field(min_length=1)
     chunk_size: int | None = Field(default=None, gt=0)
     chunk_overlap: int | None = Field(default=None, ge=0)
+    chunk_mode: str = Field(default="fixed", pattern="^(fixed|parent_child)$", alias="chunkMode")
 
 
 class IngestResult(BaseModel):
@@ -45,6 +46,13 @@ class ChatRequest(BaseModel):
     retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
     history_window: int | None = Field(default=None, ge=0, le=20, alias="historyWindow")
     history: list[ChatHistoryMsg] = Field(default_factory=list)
+    # ---- Adaptive RAG 开关(None = 跟随 rag-service 全局配置) ----
+    adaptive: bool | None = None
+    entity_boost: bool | None = Field(default=None, alias="entityBoost")
+    rerank_gating: bool | None = Field(default=None, alias="rerankGating")
+    dynamic_context: bool | None = Field(default=None, alias="dynamicContext")
+    use_caches: bool | None = Field(default=None, alias="useCaches")
+    stream: bool = False
 
 
 class LlmOnlyRequest(BaseModel):
@@ -60,8 +68,11 @@ class SourceItem(BaseModel):
     source: str = ""
     page: int | None = None
     content: str = ""
-    score: float = 0.0
+    score: float | None = None
     rerankScore: float | None = None
+    matchType: str = "vector"
+    entityMatched: bool = False
+    parentChunkId: int | None = None
 
 
 class ChatResponse(BaseModel):
@@ -74,6 +85,10 @@ class ChatResponse(BaseModel):
     completionTokens: int = 0
     totalTokens: int = 0
     retrievedCount: int = 0
+    trace: dict = Field(default_factory=dict)
+    analysis: dict = Field(default_factory=dict)
+    route: dict = Field(default_factory=dict)
+    confidence: dict = Field(default_factory=dict)
 
 
 # ---------------- 检索调试 ----------------
@@ -111,6 +126,12 @@ class EvalParams(BaseModel):
     enable_reranker: bool | None = Field(default=None, alias="enableReranker")
     rerank_top_n: int | None = Field(default=None, ge=1, le=50, alias="rerankTopN")
     retrieval_strategy: str | None = Field(default=None, pattern="^(vector|hybrid)$", alias="retrievalStrategy")
+    # ---- Adaptive RAG(消融实验开关) ----
+    adaptive: bool | None = None
+    entity_boost: bool | None = Field(default=None, alias="entityBoost")
+    rerank_gating: bool | None = Field(default=None, alias="rerankGating")
+    dynamic_context: bool | None = Field(default=None, alias="dynamicContext")
+    use_caches: bool | None = Field(default=None, alias="useCaches")
 
 
 class EvalBatchRequest(BaseModel):
@@ -140,9 +161,14 @@ class EvalItemResult(BaseModel):
     retrieval_hit: bool | None = Field(default=None, alias="retrievalHit")
     precision_at_k: float | None = Field(default=None, alias="precisionAtK")
     recall_at_k: float | None = Field(default=None, alias="recallAtK")
+    ndcg_at_k: float | None = Field(default=None, alias="ndcgAtK")
     mrr: float | None = None
     keyword_hit_rate: float | None = Field(default=None, alias="keywordHitRate")
     citation_matched: float | None = Field(default=None, alias="citationMatched")
+    # ---- Performance Detail(自适应模式) ----
+    route: str = ""
+    rerank_used: bool | None = Field(default=None, alias="rerankUsed")
+    context_tokens: int | None = Field(default=None, alias="contextTokens")
     error: str | None = None
 
 
@@ -157,6 +183,7 @@ class EvalMetrics(BaseModel):
     retrieval_hit_rate: float | None = Field(default=None, alias="retrievalHitRate")
     precision_at_k: float | None = Field(default=None, alias="precisionAtK")
     recall_at_k: float | None = Field(default=None, alias="recallAtK")
+    ndcg_at_k: float | None = Field(default=None, alias="ndcgAtK")
     mrr: float | None = None
     answer_keyword_accuracy: float | None = Field(default=None, alias="answerKeywordAccuracy")
     citation_validity: float | None = Field(default=None, alias="citationValidity")
@@ -164,6 +191,9 @@ class EvalMetrics(BaseModel):
     avg_generation_time_ms: float | None = Field(default=None, alias="avgGenerationTimeMs")
     avg_total_time_ms: float | None = Field(default=None, alias="avgTotalTimeMs")
     avg_total_tokens: float | None = Field(default=None, alias="avgTotalTokens")
+    # ---- Performance Detail ----
+    rerank_activation_rate: float | None = Field(default=None, alias="rerankActivationRate")
+    avg_context_tokens: float | None = Field(default=None, alias="avgContextTokens")
 
 
 class EvalBatchResponse(BaseModel):

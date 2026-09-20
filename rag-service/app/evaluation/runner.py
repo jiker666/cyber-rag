@@ -3,7 +3,7 @@ import logging
 
 from app.evaluation import metrics
 from app.models.schemas import EvalBatchRequest, EvalItemResult
-from app.rag.pipeline import ChatHistoryItem, RagParams, RagPipeline
+from app.rag.pipeline import RagParams, RagPipeline
 
 logger = logging.getLogger("cyber-rag.evaluation.runner")
 
@@ -22,22 +22,33 @@ class EvaluationRunner:
             enable_reranker=request.params.enable_reranker,
             rerank_top_n=request.params.rerank_top_n,
             retrieval_strategy=request.params.retrieval_strategy,
+            adaptive=request.params.adaptive,
+            entity_boost=request.params.entity_boost,
+            rerank_gating=request.params.rerank_gating,
+            dynamic_context=request.params.dynamic_context,
+            use_caches=request.params.use_caches,
         )
+        effective_k = params.top_k or 5
         kb_ids = [request.knowledge_base_id] if request.knowledge_base_id else []
         results: list[EvalItemResult] = []
         for item in request.items:
             try:
                 if request.mode == "LLM_ONLY":
                     res = self.pipeline.llm_only_chat(item.question, params)
-                    # LLM_ONLY 无检索, Hit/P@K/R@K/MRR/引用类指标不适用(记 None, 不落 0)
-                    hit = precision = recall = mrr_value = citation = None
+                    # LLM_ONLY 无检索, 检索/引用类指标不适用(记 None, 不落 0)
+                    hit = precision = recall = ndcg = mrr_value = citation = None
                 else:
                     res = self.pipeline.rag_chat(item.question, kb_ids, params, history=None)
                     hit, precision, recall = metrics.retrieval_metrics(
-                        res.sources, item.expected_source, params.top_k or 5
+                        res.sources, item.expected_source, effective_k
                     )
+                    ndcg = metrics.ndcg_at_k(res.sources, item.expected_source, effective_k)
                     mrr_value = metrics.mrr(res.sources, item.expected_source)
                     citation = metrics.citation_validity(res.answer, res.sources)
+                trace = res.trace or {}
+                route = trace.get("route", "")
+                rerank_used = trace.get("rerankerUsed") if trace else None
+                context_tokens = trace.get("contextTokens") if trace else None
                 results.append(
                     EvalItemResult(
                         item_id=item.item_id,
@@ -53,11 +64,17 @@ class EvaluationRunner:
                         retrieval_hit=hit,
                         precision_at_k=precision,
                         recall_at_k=recall,
+                        ndcg_at_k=ndcg,
                         mrr=mrr_value,
                         keyword_hit_rate=metrics.keyword_hit_rate(
                             res.answer, item.expected_keywords
                         ),
                         citation_matched=citation,
+                        route=str(route or ""),
+                        rerank_used=(
+                            bool(rerank_used) if rerank_used is not None else None
+                        ),
+                        context_tokens=int(context_tokens) if context_tokens is not None else None,
                     )
                 )
             except Exception as e:  # 单题失败不影响整体

@@ -24,6 +24,12 @@ public class EvaluationTask {
     private BigDecimal temperature;
     private Integer enableReranker;
     private String retrievalStrategy;
+    /** Adaptive RAG 总开关(NULL 未指定, 跟随 rag-service 全局配置) */
+    private Integer adaptiveEnabled;
+    private Integer entityBoost;
+    private Integer rerankGating;
+    private Integer dynamicContext;
+    private Integer useCaches;
     private Integer total;
     private Integer completed;
     private Integer failed;

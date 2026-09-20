@@ -163,6 +163,11 @@ public class EvaluationServiceImpl implements EvaluationService {
         task.setEnableReranker(Boolean.TRUE.equals(request.getEnableReranker()) ? 1 : 0);
         task.setRetrievalStrategy(request.getRetrievalStrategy() != null
                 ? request.getRetrievalStrategy() : "vector");
+        task.setAdaptiveEnabled(boolToTri(request.getAdaptive()));
+        task.setEntityBoost(boolToTri(request.getEntityBoost()));
+        task.setRerankGating(boolToTri(request.getRerankGating()));
+        task.setDynamicContext(boolToTri(request.getDynamicContext()));
+        task.setUseCaches(boolToTri(request.getUseCaches()));
         task.setTotal(0);
         task.setCompleted(0);
         task.setFailed(0);
@@ -214,6 +219,11 @@ public class EvaluationServiceImpl implements EvaluationService {
             params.setEnableReranker(task.getEnableReranker() != null && task.getEnableReranker() == 1);
             params.setRetrievalStrategy(task.getRetrievalStrategy() != null
                     ? task.getRetrievalStrategy() : "vector");
+            params.setAdaptive(triToBool(task.getAdaptiveEnabled()));
+            params.setEntityBoost(triToBool(task.getEntityBoost()));
+            params.setRerankGating(triToBool(task.getRerankGating()));
+            params.setDynamicContext(triToBool(task.getDynamicContext()));
+            params.setUseCaches(triToBool(task.getUseCaches()));
             batchRequest.setParams(params);
             batchRequest.setItems(items.stream().map(i -> {
                 EvalBatchRequest.EvalItem item = new EvalBatchRequest.EvalItem();
@@ -248,8 +258,15 @@ public class EvaluationServiceImpl implements EvaluationService {
                 }
                 result.setPrecisionAtK(toBigDecimal(r.getPrecisionAtK()));
                 result.setRecallAtK(toBigDecimal(r.getRecallAtK()));
+                result.setNdcgAtK(toBigDecimal(r.getNdcgAtK()));
                 result.setMrr(toBigDecimal(r.getMrr()));
                 result.setKeywordHitRate(toBigDecimal(r.getKeywordHitRate()));
+                // Performance Detail(非自适应模式为 NULL, 不参与统计)
+                result.setRoute(r.getRoute() == null || r.getRoute().isBlank() ? null : r.getRoute());
+                if (r.getRerankUsed() != null) {
+                    result.setRerankUsed(r.getRerankUsed() ? 1 : 0);
+                }
+                result.setContextTokens(r.getContextTokens());
                 if (r.getCitationMatched() != null) {
                     // 逐题引用编号有效率(0-1 连续值)二值化入库: >0.5 记为有效(历史口径保持不变)
                     result.setCitationMatched(r.getCitationMatched() > 0.5 ? 1 : 0);
@@ -373,7 +390,8 @@ public class EvaluationServiceImpl implements EvaluationService {
         List<EvaluationResult> results = taskResults(taskId);
         StringBuilder sb = new StringBuilder();
         sb.append("taskId,taskName,mode,itemId,question,answer,retrievalTimeMs,generationTimeMs,totalTimeMs,")
-          .append("promptTokens,completionTokens,retrievalHit,precisionAtK,recallAtK,mrr,keywordHitRate,citationMatched,")
+          .append("promptTokens,completionTokens,retrievalHit,precisionAtK,recallAtK,ndcgAtK,mrr,keywordHitRate,citationMatched,")
+          .append("route,rerankUsed,contextTokens,")
           .append("manualCorrectness,manualRelevance,manualCompleteness,manualHallucination,error\n");
         for (EvaluationResult r : results) {
             sb.append(taskId).append(',')
@@ -390,9 +408,13 @@ public class EvaluationServiceImpl implements EvaluationService {
               .append(r.getRetrievalHit() == null ? "" : r.getRetrievalHit()).append(',')
               .append(r.getPrecisionAtK() == null ? "" : r.getPrecisionAtK()).append(',')
               .append(r.getRecallAtK() == null ? "" : r.getRecallAtK()).append(',')
+              .append(r.getNdcgAtK() == null ? "" : r.getNdcgAtK()).append(',')
               .append(r.getMrr() == null ? "" : r.getMrr()).append(',')
               .append(r.getKeywordHitRate() == null ? "" : r.getKeywordHitRate()).append(',')
               .append(r.getCitationMatched() == null ? "" : r.getCitationMatched()).append(',')
+              .append(csv(r.getRoute())).append(',')
+              .append(r.getRerankUsed() == null ? "" : r.getRerankUsed()).append(',')
+              .append(r.getContextTokens() == null ? "" : r.getContextTokens()).append(',')
               .append(r.getManualCorrectness()).append(',')
               .append(r.getManualRelevance()).append(',')
               .append(r.getManualCompleteness()).append(',')
@@ -417,6 +439,11 @@ public class EvaluationServiceImpl implements EvaluationService {
             row.put("topK", task.getTopK());
             row.put("enableReranker", task.getEnableReranker());
             row.put("retrievalStrategy", task.getRetrievalStrategy());
+            row.put("adaptiveEnabled", task.getAdaptiveEnabled());
+            row.put("entityBoost", task.getEntityBoost());
+            row.put("rerankGating", task.getRerankGating());
+            row.put("dynamicContext", task.getDynamicContext());
+            row.put("useCaches", task.getUseCaches());
             row.put("chunkSize", task.getChunkSize());
             row.put("status", task.getStatus());
             Map<String, Object> metrics = task.getMetrics() != null
@@ -437,6 +464,16 @@ public class EvaluationServiceImpl implements EvaluationService {
             v = '"' + v.replace("\"", "\"\"") + '"';
         }
         return v;
+    }
+
+    /** Boolean → 三态 Integer(1/0/null), null 表示未指定、跟随 rag-service 全局配置 */
+    private static Integer boolToTri(Boolean value) {
+        return value == null ? null : (value ? 1 : 0);
+    }
+
+    /** 三态 Integer → Boolean */
+    private static Boolean triToBool(Integer value) {
+        return value == null ? null : (value == 1);
     }
 
     private static BigDecimal toBigDecimal(Double value) {
