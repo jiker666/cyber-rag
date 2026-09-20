@@ -128,6 +128,13 @@ public class ChatServiceImpl implements ChatService {
                     String type = String.valueOf(event.get("type"));
                     switch (type) {
                         case "done" -> {
+                            // 用户消息已被清空/会话已删除 → 丢弃结果, 避免孤儿回答写回已清空的会话
+                            if (messageMapper.selectById(prep.userMsg.getId()) == null) {
+                                log.info("流式结果丢弃(用户消息已被清除): conversation={}",
+                                        prep.conversation.getId());
+                                emitter.complete();
+                                return;
+                            }
                             // done 携带完整结果(答案/引用/Trace), 由服务端落库后再推给前端
                             ChatResponse response = JsonUtil.convert(
                                     event.get("result"), ChatResponse.class);
