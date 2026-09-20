@@ -108,8 +108,13 @@ def test_adaptive_fast_route_vector_only(memory_store, fake_embedding, fake_llm,
     assert result.trace["rerankerUsed"] is False
 
 
-def test_adaptive_fast_escalates_on_low_confidence(memory_store, fake_embedding, fake_llm):
+def test_adaptive_fast_escalates_on_low_confidence(memory_store, fake_embedding, fake_llm, monkeypatch):
     """FAST 路径置信不足 → 自动升级 HYBRID(trace 记录原因)"""
+    from app.core.config import get_settings
+
+    # 阈值已按真实分布标定为 0.55, Fake 余弦高于该值;
+    # 本测试验证升级逻辑本身, 用高阈值强制触发(与 FAST 直出测试的 0.0 手法对称)
+    monkeypatch.setattr(get_settings(), "fast_path_top1_min", 0.99, raising=False)
     _ingest(memory_store, fake_embedding)
     pipeline = _pipeline(memory_store, fake_embedding, fake_llm)
     result = pipeline.rag_chat(
@@ -204,3 +209,65 @@ def test_rag_chat_stream_event_sequence(memory_store, fake_embedding):
     assert done["answer"] == "第一段第二段第三段"
     assert done["trace"]["llmTtftMs"] == 500  # TTFT 从 LLM usage 事件透传
     assert done["sources"]
+
+
+# ---------------- FAST 缓存路径修复(第四轮审计发现) ----------------
+def test_fast_escalation_skips_cache_write(memory_store, fake_embedding, fake_llm, monkeypatch):
+    """FAST 升级后的混合候选不得写入向量策略的缓存 key。
+
+    修复前: 升级路径未失效 cache_key, hybrid 候选被存入 vector key,
+    后续命中时出现 route=FAST 但 matchType=both 的矛盾组合。
+    """
+    from app.rag.caches import RetrievalCache
+    from app.core.config import get_settings
+
+    fresh = RetrievalCache(maxsize=8)
+    monkeypatch.setattr("app.rag.caches.get_retrieval_cache", lambda: fresh)
+    monkeypatch.setattr(get_settings(), "fast_path_top1_min", 0.99, raising=False)
+    _ingest(memory_store, fake_embedding)
+    pipeline = _pipeline(memory_store, fake_embedding, fake_llm)
+    # 高阈值强制升级 → 两次相同查询均应冷检索并升级 HYBRID, 缓存保持为空
+    for _ in range(2):
+        result = pipeline.rag_chat(
+            "SQL 注入的危害包括哪些", [1],
+            RagParams(adaptive=True, score_threshold=0.0, use_caches=True),
+        )
+        assert result.route["route"] == "HYBRID"
+        assert result.trace["retrievalCacheHit"] is False
+    assert len(fresh._cache._data) == 0  # 升级路径不落缓存
+
+
+def test_fast_cache_hit_low_confidence_reruns_full_retrieval(
+    memory_store, fake_embedding, fake_llm, monkeypatch
+):
+    """缓存命中的 FAST 候选同样执行置信校验: 不足则视为未命中走完整检索。
+
+    修复前: 命中路径跳过 FAST 升级校验, route 统计失真
+    (benchmark D_adaptive_cache pass1/pass2 曾复现该行为差异)。
+    """
+    from app.rag.caches import RetrievalCache, get_kb_version_registry
+    from app.rag.retriever import RetrievalMeta, RetrievedChunk
+    from app.core.config import get_settings
+
+    fresh = RetrievalCache(maxsize=8)
+    monkeypatch.setattr("app.rag.caches.get_retrieval_cache", lambda: fresh)
+    monkeypatch.setattr(get_settings(), "fast_path_top1_min", 0.99, raising=False)
+    _ingest(memory_store, fake_embedding)
+    # 预置低于 FAST 阈值的 vector 候选(模拟历史写入的污染条目): FAST 的 k=3
+    query = "SQL 注入的危害包括哪些"
+    reg = get_kb_version_registry(memory_store)
+    key = fresh.build_key([1], reg.versions([1]), query, "vector", 3, False, False)
+    low = RetrievedChunk(
+        content=SQL_DOC[:60], document_id=101, document_name="SQL注入防护指南.md",
+        knowledge_base_id=1, chunk_index=0, source="SQL注入防护指南.md", page=None,
+        score=0.30,
+    )
+    fresh.put(key, ([low], RetrievalMeta()))
+    pipeline = _pipeline(memory_store, fake_embedding, fake_llm)
+    result = pipeline.rag_chat(
+        query, [1], RagParams(adaptive=True, score_threshold=0.0, use_caches=True)
+    )
+    # 命中但置信不足 → 视为未命中 → 冷检索 → 升级 HYBRID
+    assert result.trace["retrievalCacheHit"] is False
+    assert result.route["route"] == "HYBRID"
+    assert "升级" in result.route["reason"]

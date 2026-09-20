@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     rerank_agreement_threshold: float = 0.6  # vector/BM25 Top-5 重合率高于此 → 双路一致
     complexity_threshold: float = 7.5  # 复杂度(0-10)达到此值才允许多跳分解
     # FAST 路由(简单事实题向量直出)判定阈值
-    fast_path_top1_min: float = 0.72
-    fast_path_margin_min: float = 0.10
+    fast_path_top1_min: float = 0.55
+    fast_path_margin_min: float = 0.015
     # Dynamic Context Budget
     max_context_tokens: int = 3000  # 送入 LLM 的上下文 Token 预算(估算口径)
     min_context_chunks: int = 2

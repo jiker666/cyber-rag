@@ -1,0 +1,7 @@
+﻿config,n,retrieval_p50,retrieval_p95,ttft_p50,ttft_p95,total_p50,total_p95,rerank_rate,emb_cache_rate,retr_cache_rate,avg_ctx_tokens,routes
+A_vector_top5,14,227,675,7917,30682,17270,45853,0.0,0.0,0.0,964.1,-x14
+B_hybrid_top5,15,225,327,8261,14420,19738,30398,0.0,0.0,0.0,1008.3,-x15
+C_hybrid_rerank,15,912,2074,11491,20216,24906,38473,1.0,0.0,0.0,1029.0,-x15
+D_adaptive_nocache,15,869,1154,9314,27181,22139,41118,0.8667,0.0,0.0,1000.1,DECOMPOSEx1 EXACTx3 FASTx1 HYBRIDx10
+D_adaptive_cache/pass1,15,857,1304,7359,15972,20084,35463,0.8667,0.0,0.0,970.7,DECOMPOSEx1 EXACTx3 FASTx1 HYBRIDx10
+D_adaptive_cache/pass2,15,886,1060,8115,17279,23020,36273,0.8667,0.0,0.9333,970.7,DECOMPOSEx1 EXACTx3 FASTx1 HYBRIDx10

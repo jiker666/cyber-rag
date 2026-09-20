@@ -322,7 +322,20 @@ class Retriever:
                 meta.retrieval_cache_hit = True
                 meta.entity_boosted = cached_meta.entity_boosted
                 candidates = cached_candidates
-                logger.info("检索缓存命中: query=%r (%d 候选)", query[:30], len(candidates))
+                # FAST 路径缓存候选同样执行置信校验(与冷路径同阈值):
+                # 不足则视为未命中走完整检索, 避免 route=FAST 但候选实为升级后混合结果的矛盾
+                if adaptive and decision.route == "FAST" and candidates:
+                    top1 = candidates[0].score or 0.0
+                    top2 = (candidates[1].score or 0.0) if len(candidates) > 1 else 0.0
+                    if top1 < settings.fast_path_top1_min or (top1 - top2) < settings.fast_path_margin_min:
+                        logger.info(
+                            "FAST 缓存候选置信不足(top1=%.3f, margin=%.3f), 视为未命中重新检索",
+                            top1, top1 - top2,
+                        )
+                        meta.retrieval_cache_hit = False
+                        candidates = []
+                if meta.retrieval_cache_hit:
+                    logger.info("检索缓存命中: query=%r (%d 候选)", query[:30], len(candidates))
 
         rerank_top1 = None
         if meta.retrieval_cache_hit:
@@ -353,6 +366,7 @@ class Retriever:
                     top2 = (candidates[1].score or 0.0) if len(candidates) > 1 else 0.0
                     if top1 < settings.fast_path_top1_min or (top1 - top2) < settings.fast_path_margin_min:
                         meta.fast_escalated = True
+                        cache_key = None  # 升级后候选为混合结果, 不得写入向量策略的缓存 key
                         decision.route = "HYBRID"
                         decision.strategy = "hybrid"
                         decision.rerank_policy = "auto"
