@@ -89,9 +89,17 @@ class AnthropicCompatibleLLM(BaseLLM):
         usage = data.get("usage", {})
         prompt_tokens = int(usage.get("input_tokens", 0) or 0)
         completion_tokens = int(usage.get("output_tokens", 0) or 0)
+        stop_reason = data.get("stop_reason")
+        # GLM 5.x thinking 与正文共享 max_tokens 预算: stop_reason=max_tokens 时可能正文为空(推理耗尽预算)
+        if not content:
+            logger.warning(
+                "LLM 返回空正文: stop_reason=%s, output_tokens=%d, max_tokens=%d "
+                "(thinking 可能耗尽输出预算, 建议调大 LLM_MAX_TOKENS)",
+                stop_reason, completion_tokens, body["max_tokens"],
+            )
         logger.info(
-            "LLM 响应: %d chars, tokens=%d, latency=%dms",
-            len(content), prompt_tokens + completion_tokens, latency,
+            "LLM 响应: %d chars, tokens=%d, latency=%dms, stop_reason=%s",
+            len(content), prompt_tokens + completion_tokens, latency, stop_reason,
         )
         return LLMResult(
             content=content,
@@ -136,6 +144,8 @@ class AnthropicCompatibleLLM(BaseLLM):
         first_token_at: float | None = None
         prompt_tokens = 0
         completion_tokens = 0
+        text_chars = 0
+        stop_reason = None
         try:
             with httpx.stream(
                 "POST", f"{self._base_url}/v1/messages",
@@ -160,16 +170,24 @@ class AnthropicCompatibleLLM(BaseLLM):
                         if delta.get("type") == "text_delta" and delta.get("text"):
                             if first_token_at is None:
                                 first_token_at = time.perf_counter()
+                            text_chars += len(delta["text"])
                             yield {"type": "delta", "text": delta["text"]}
                     elif etype == "message_delta":
                         usage = event.get("usage") or {}
                         completion_tokens = int(usage.get("output_tokens", 0) or 0)
+                        stop_reason = (event.get("delta") or {}).get("stop_reason")
         except LLMError:
             raise
         except Exception as e:
             logger.error("LLM 流式调用异常: %s", mask_secrets(str(e)))
             raise LLMError(f"大模型流式调用失败: {mask_secrets(str(e))}") from e
         end = time.perf_counter()
+        if text_chars == 0:
+            logger.warning(
+                "LLM 流式零正文: stop_reason=%s, output_tokens=%d, max_tokens=%d "
+                "(thinking 可能耗尽输出预算, 建议调大 LLM_MAX_TOKENS)",
+                stop_reason, completion_tokens, body["max_tokens"],
+            )
         yield {
             "type": "usage",
             "prompt_tokens": prompt_tokens,

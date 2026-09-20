@@ -502,6 +502,18 @@ class RagPipeline:
         trace.total_ms = int((time.perf_counter() - total_start) * 1000)
 
         answer = "".join(answer_parts)
+        if not answer.strip():
+            # 零正文落库无意义(典型成因: GLM thinking 耗尽 max_tokens 预算, 见 llm provider 告警日志);
+            # 改发 error 事件, 由调用方(前端/评测)显式感知, 不静默持久化空答案
+            logger.warning(
+                "流式生成零正文: 类型=%s, 路由=%s, completion_tokens=%d",
+                analysis.query_type, trace.route, completion_tokens,
+            )
+            yield {
+                "type": "error",
+                "message": "模型未返回内容(推理可能耗尽输出预算), 请重试或简化问题",
+            }
+            return
         logger.info(
             "RAG 流式问答完成: 类型=%s, 路由=%s, 上下文=%d, TTFT=%dms, 生成=%dms, 总耗时=%dms",
             analysis.query_type, trace.route, len(chunks), trace.llm_ttft_ms,

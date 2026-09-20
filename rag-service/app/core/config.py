@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     # LLM 协议: openai(OpenAI 兼容 /chat/completions) | anthropic(Anthropic 兼容 /v1/messages)
     llm_provider: str = "openai"
     llm_timeout: int = 120
-    llm_max_tokens: int = 2048
+    # GLM 5.x thinking 与正文共享 max_tokens 预算; 2048 会被推理耗尽导致正文为空(实测出题类提示需 ~6900)
+    llm_max_tokens: int = 8192
 
     # Embedding
     embedding_provider: str = "local"  # local / openai

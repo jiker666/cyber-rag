@@ -211,6 +211,26 @@ def test_rag_chat_stream_event_sequence(memory_store, fake_embedding):
     assert done["sources"]
 
 
+def test_rag_chat_stream_empty_answer_yields_error(memory_store, fake_embedding):
+    """零正文(如 GLM thinking 耗尽 max_tokens)→ error 事件, 不发空 done(不落库)。"""
+
+    class EmptyStreamLLM(StreamingFakeLLM):
+        def chat_stream(self, messages, temperature=0.3, max_tokens=None):
+            yield {"type": "usage", "prompt_tokens": 80, "completion_tokens": 8192,
+                   "ttft_ms": None, "latency_ms": 60000}
+
+    _ingest(memory_store, fake_embedding)
+    retriever = Retriever(store=memory_store, embedding=fake_embedding, reranker=FakeReranker())
+    pipeline = RagPipeline(retriever=retriever, llm=EmptyStreamLLM())
+
+    events = list(pipeline.rag_chat_stream(
+        "如何防御 SQL 注入攻击", [1], RagParams(adaptive=True, score_threshold=0.0)
+    ))
+    types = [e["type"] for e in events]
+    assert types == ["analysis", "retrieval", "error"]  # 无 delta / 无 done
+    assert "未返回内容" in events[-1]["message"]
+
+
 # ---------------- FAST 缓存路径修复(第四轮审计发现) ----------------
 def test_fast_escalation_skips_cache_write(memory_store, fake_embedding, fake_llm, monkeypatch):
     """FAST 升级后的混合候选不得写入向量策略的缓存 key。

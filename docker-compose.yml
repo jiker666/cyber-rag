@@ -34,6 +34,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
       # Embedding: 默认本地 BGE(与 README/.env.example/Settings 默认一致);
       # 切换远程 API 时设 EMBEDDING_PROVIDER=openai 并配置 EMBEDDING_* 三项
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
